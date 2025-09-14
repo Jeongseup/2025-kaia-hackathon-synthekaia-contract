@@ -1,0 +1,91 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.19;
+
+import "./interfaces/IstKAIA.sol";
+
+/**
+ * @title KaiaStaker
+ * @notice A wrapper contract that allows users to deposit KAIA,
+ * which is then staked in the stKAIA protocol. This contract
+ * holds the resulting stKAIA on behalf of the users.
+ */
+contract KaiaStaker {
+    // The stKAIA token contract interface, set at deployment.
+    IstKAIA public immutable stKAIA;
+
+    // The owner of the contract, who has administrative privileges.
+    address public owner;
+
+    // Event to log user deposits.
+    event Deposited(address indexed user, uint256 kaiaAmount);
+    // Event to log withdrawals of stKAIA by the owner.
+    event Withdrawn(address indexed to, uint256 stKaiaAmount);
+
+    // Modifier to restrict function access to the contract owner.
+    modifier onlyOwner() {
+        require(msg.sender == owner, "KaiaStaker: Caller is not the owner");
+        _;
+    }
+
+    /**
+     * @notice Sets the stKAIA contract address upon deployment.
+     * @param _stKAIAAddress The address of the stKAIA liquid staking contract.
+     */
+    constructor(address _stKAIAAddress) {
+        require(_stKAIAAddress != address(0), "KaiaStaker: Zero address provided for stKAIA contract");
+        stKAIA = IstKAIA(_stKAIAAddress);
+        owner = msg.sender;
+    }
+
+    /**
+     * @notice Receives KAIA from a user, stakes it in the stKAIA contract,
+     * and holds the resulting stKAIA tokens within this contract.
+     * @dev This function is `payable` and expects KAIA to be sent with the transaction.
+     */
+    function deposit() external payable {
+        uint256 amount = msg.value;
+        require(amount > 0, "KaiaStaker: Deposit amount must be greater than zero");
+
+        // Call the stakeFor function on the stKAIA contract, forwarding the KAIA.
+        // The recipient is this contract (address(this)), so it will receive the stKAIA shares.
+        stKAIA.stakeFor{value: amount}(address(this));
+
+        emit Deposited(msg.sender, amount);
+    }
+
+    /**
+     * @notice Allows the owner to withdraw stKAIA tokens held by this contract.
+     * @param _amount The amount of stKAIA to withdraw.
+     * @param _to The address to send the stKAIA tokens to.
+     */
+    function withdrawStKAIA(uint256 _amount, address _to) external onlyOwner {
+        require(_to != address(0), "KaiaStaker: Cannot withdraw to the zero address");
+        
+        uint256 balance = stKAIA.balanceOf(address(this));
+        require(_amount > 0 && _amount <= balance, "KaiaStaker: Invalid or insufficient stKAIA amount");
+
+        // Transfer the stKAIA tokens to the specified address.
+        bool success = stKAIA.transfer(_to, _amount);
+        require(success, "KaiaStaker: stKAIA transfer failed");
+
+        emit Withdrawn(_to, _amount);
+    }
+
+    /**
+     * @notice Returns the stKAIA balance of this contract.
+     * @return The amount of stKAIA this contract holds.
+     */
+    function getStKaiABalance() external view returns (uint256) {
+        return stKAIA.balanceOf(address(this));
+    }
+
+    /**
+     * @notice Allows the owner to withdraw any KAIA accidentally sent to this contract.
+     */
+    function withdrawKAIA() external onlyOwner {
+        uint256 balance = address(this).balance;
+        if (balance > 0) {
+            payable(owner).transfer(balance);
+        }
+    }
+}

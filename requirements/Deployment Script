@@ -1,0 +1,66 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import "forge-std/Script.sol";
+import "../src/HybridStrategyManager.sol";
+
+contract DeployHybridStrategyManager is Script {
+    function run() external returns (HybridStrategyManager) {
+        // --- IMPORTANT: Replace these with actual addresses on your target network ---
+        // You can use environment variables for better security and flexibility.
+        address ST_KAIA_ADDRESS = vm.envAddress("ST_KAIA_ADDRESS"); // e.g., 0xF80F2b22932fCEC6189b9153aA18662b15CC9C00
+        address PERP_DEX_ADDRESS = vm.envAddress("PERP_DEX_ADDRESS");
+        address KLAY_SWAP_ADDRESS = vm.envAddress("KLAY_SWAP_ADDRESS");
+        address USDT_ADDRESS = vm.envAddress("USDT_ADDRESS");
+        address INITIAL_OWNER = msg.sender;
+
+        vm.startBroadcast();
+
+        HybridStrategyManager manager = new HybridStrategyManager(
+            ST_KAIA_ADDRESS,
+            PERP_DEX_ADDRESS,
+            KLAY_SWAP_ADDRESS,
+            USDT_ADDRESS,
+            INITIAL_OWNER
+        );
+
+        vm.stopBroadcast();
+        
+        console.log("HybridStrategyManager deployed at:", address(manager));
+        return manager;
+    }
+}
+
+
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import "forge-std/Script.sol";
+import "../src/KaiaStakingManager.sol";
+
+contract DeployKaiaStakingManager is Script {
+    function run() external returns (KaiaStakingManager) {
+        // --- Configuration ---
+        // IMPORTANT: Replace with the actual stKAIA contract address on the target network.
+        // From the provided documents, the stKlay (now stKAIA) address is:
+        address stKaiaAddress = 0xF80F2b22932fCEC6189b9153aA18662b15CC9C00;
+        
+        // The deployer's address will become the initial owner.
+        address initialOwner = msg.sender;
+        
+        // --- Deployment ---
+        vm.startBroadcast();
+        
+        KaiaStakingManager manager = new KaiaStakingManager(stKaiaAddress, initialOwner);
+        
+        vm.stopBroadcast();
+        
+        // --- Logging ---
+        console.log("KaiaStakingManager deployed at:", address(manager));
+        console.log("   - stKAIA Contract:", manager.ST_KAIA());
+        console.log("   - Owner:", manager.owner());
+        
+        return manager;
+    }
+}
+

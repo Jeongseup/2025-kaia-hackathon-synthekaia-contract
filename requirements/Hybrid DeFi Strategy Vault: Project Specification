@@ -1,0 +1,300 @@
+Hybrid DeFi Strategy Vault: 프로젝트 명세서문서 버전: 1.0작성일: 2025년 9월 14일1. PM (기획) 파트1.1. 프로젝트 개요프로젝트명: Hybrid DeFi Strategy Vault핵심 컨셉: 사용자가 예치한 KAIA 자산을 활용하여, **리퀴드 스테이킹(Liquid Staking)**을 통한 안정적인 이자 수익과 **무기한 선물 숏 포지션(Perpetual Futures Short Position)**을 통한 시장 하락 헷징 및 추가 수익 기회를 동시에 추구하는 하이브리드 DeFi 상품입니다.타겟 사용자:KAIA 보유자 중 단순 스테이킹 이상의 다각화된 수익 전략을 원하는 사용자시장 변동성에 대한 위험 헷징(hedge)에 관심 있는 디파이 투자자1.2. 핵심 기능 및 전략1.2.1. 자동화된 하이브리드 투자 전략사용자가 deposit 함수를 통해 KAIA를 예치하면, 컨트랙트는 자금을 50:50으로 자동 분배하여 아래의 두 가지 전략을 동시에 실행합니다.리퀴드 스테이킹 (50%): 예치된 KAIA의 50%는 stKAIA 프로토콜에 스테이킹됩니다. 이를 통해 사용자는 KAIA 네트워크의 스테이킹 보상을 지속적으로 얻게 되며, 자산은 stKAIA라는 유동성 토큰 형태로 컨트랙트에 보관됩니다.PerpDEX 숏 포지션 (50%): 나머지 50%의 KAIA는 KlaySwap과 같은 DEX를 통해 USDT로 자동 스왑됩니다. 이후 스왑된 USDT를 증거금으로 PerpDEX(k-bit) 프로토콜에서 BTC(비트코인)에 대한 숏 포지션을 오픈합니다. (예: 3배 레버리지)1.2.2. 확장성 및 유지보수프로토콜 연동 관리: 컨트랙트의 owner는 향후治理(governance) 결정에 따라 연동된 외부 프로토콜(stKAIA, PerpDEX, KlaySwap 등)의 컨트랙트 주소를 안전하게 변경할 수 있습니다. 이는 프로토콜의 버전 업그레이드나 더 나은 조건의 프로토콜로 마이그레이션할 때 유연하게 대처할 수 있도록 설계된 핵심 기능입니다.1.3. 시스템 아키텍처 및 사용자 흐름사용자 흐름 (User Flow):예치 (Deposit): 사용자는 자신의 지갑에서 HybridStrategyManager 컨트랙트의 deposit 함수를 호출하며 원하는 수량의 KAIA를 전송합니다.자동 분배 및 실행: 컨트랙트는 수신한 KAIA를 50:50으로 나누어 stKAIA 스테이킹과 PerpDEX 숏 포지션 오픈을 트랜잭션 한 번에 모두 처리합니다.자산 보관: 실행 결과로 얻은 stKAIA와 PerpDEX 포지션에 대한 소유권은 모두 HybridStrategyManager 컨트랙트가 안전하게 보관 및 관리합니다.2. Developer (개발) 파트2.1. 기술 스택 및 아키텍처언어 및 프레임워크: Solidity, Foundry핵심 아키텍처:모듈성(Modularity): 외부 프로토콜(stKAIA, PerpDEX 등)과의 모든 상호작용은 인터페이스(interface)를 통해 이루어집니다. 이는 특정 프로토콜의 구현에 종속되지 않는 유연하고 확장 가능한 설계를 가능하게 합니다.보안: OpenZeppelin의 검증된 라이브러리(Ownable, ReentrancyGuard)를 상속받아 컨트랙트의 소유권 관리 및 재진입 공격 방지 기능을 강화했습니다.테스트 용이성: 의존성 주입(Dependency Injection) 패턴을 사용하여, 테스트 시 실제 프로토콜 대신 모의(Mock) 컨트랙트를 쉽게 주입할 수 있도록 설계되었습니다. 이를 통해 빠르고 안정적인 독립 테스트 환경을 구축합니다.2.2. Foundry 프로젝트 설정 가이드1단계: Foundry 프로젝트 초기화mkdir hybrid-strategy-manager && cd hybrid-strategy-manager
+forge init
+2단계: OpenZeppelin 종속성 설치forge install OpenZeppelin/openzeppelin-contracts
+3단계: foundry.toml 설정프로젝트 루트의 foundry.toml 파일을 열고, remappings을 추가하여 OpenZeppelin 라이브러리 경로를 설정합니다.[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+remappings = ['@openzeppelin/=lib/openzeppelin-contracts/contracts/']
+2.3. 전체 소스 코드src/interfaces/IStKaia.sol// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+/\*\*
+
+- @title IStKaia
+- @dev Interface for the stKAIA liquid staking contract.
+  \*/
+  interface IStKaia {
+  function stakeFor(address recipient) external payable;
+  function balanceOf(address account) external view returns (uint256);
+  }
+  src/interfaces/IPerpDex.sol// SPDX-License-Identifier: MIT
+  pragma solidity ^0.8.20;
+
+/\*\*
+
+- @title IPerpDex
+- @dev Simplified interface for the PerpDex contract.
+  \*/
+  interface IPerpDex {
+  enum TokenType { Btc, Klay, Wemix, Eth, Doge, Pepe, Sol, Xrp, Apt, Sui, Shib, Sei, Ada, Pol, Bnb, Dot, Ltc, Avax, Trump }
+  enum OracleType { BisonAI, Pyth }
+
+      struct OraclePrices {
+          OracleType oracleType;
+          bytes32[] feedHashes;
+          int256[] answers;
+          uint256[] timestamps;
+          bytes[] proofs;
+      }
+
+      struct OpenPositionData {
+          TokenType tokenType;
+          uint256 marginAmount;
+          uint256 leverage;
+          bool long;
+          address trader;
+          OraclePrices priceData;
+          uint256 tpPrice;
+          uint256 slPrice;
+          uint256 expectedPrice;
+          bytes userSignedData;
+      }
+
+      function openPosition(OpenPositionData calldata o) external payable;
+
+  }
+  src/interfaces/IKlaySwap.sol// SPDX-License-Identifier: MIT
+  pragma solidity ^0.8.20;
+
+/\*\*
+
+- @title IKlaySwap
+- @dev Simplified interface for a DEX like KlaySwap.
+  \*/
+  interface IKlaySwap {
+  function swapExactKLAYForTokens(
+  uint amountOutMin,
+  address[] calldata path,
+  address to,
+  uint deadline
+  ) external payable returns (uint[] memory amounts);
+  }
+  src/HybridStrategyManager.sol (확장성 기능 추가됨)// SPDX-License-Identifier: MIT
+  pragma solidity ^0.8.20;
+
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "./interfaces/IStKaia.sol";
+import "./interfaces/IPerpDex.sol";
+import "./interfaces/IKlaySwap.sol";
+
+/\*\*
+
+- @title HybridStrategyManager
+- @notice Manages a hybrid DeFi strategy: 50% liquid staking and 50% shorting on a PerpDEX.
+- @dev Owner can update external protocol addresses for future extensibility.
+  \*/
+  contract HybridStrategyManager is Ownable, ReentrancyGuard {
+  // --- External Protocol Contracts ---
+  IStKaia public stKaia;
+  IPerpDex public perpDex;
+  IKlaySwap public klaySwap;
+  IERC20 public usdt;
+
+      // --- State Variables ---
+      mapping(address => uint256) public userTotalDeposits;
+      uint256 public totalKaiADeposited;
+
+      // --- Events ---
+      event StrategyExecuted(
+          address indexed user,
+          uint256 totalDeposit,
+          uint256 amountToStake,
+          uint256 amountToShort
+      );
+      event ProtocolAddressesUpdated(
+          address newStKaia,
+          address newPerpDex,
+          address newKlaySwap,
+          address newUsdt
+      );
+
+      constructor(
+          address _stKaiaAddress,
+          address _perpDexAddress,
+          address _klaySwapAddress,
+          address _usdtAddress,
+          address _initialOwner
+      ) Ownable(_initialOwner) {
+          stKaia = IStKaia(_stKaiaAddress);
+          perpDex = IPerpDex(_perpDexAddress);
+          klaySwap = IKlaySwap(_klaySwapAddress);
+          usdt = IERC20(_usdtAddress);
+      }
+
+      /**
+       * @notice Main deposit function to execute the hybrid strategy.
+       */
+      function deposit() external payable nonReentrant {
+          uint256 totalDeposit = msg.value;
+          require(totalDeposit > 0, "Deposit must be > 0");
+
+          uint256 amountToStake = totalDeposit / 2;
+          uint256 amountToSwap = totalDeposit - amountToStake;
+
+          // --- 1. Liquid Staking Strategy ---
+          if (amountToStake > 0) {
+              stKaia.stakeFor{value: amountToStake}(address(this));
+          }
+
+          // --- 2. PerpDEX Short Strategy ---
+          if (amountToSwap > 0) {
+              address[] memory path = new address[](2);
+              path[0] = 0x0000000000000000000000000000000000000000;
+              path[1] = address(usdt);
+
+              uint[] memory amounts = klaySwap.swapExactKLAYForTokens{value: amountToSwap}(
+                  0, path, address(this), block.timestamp
+              );
+              uint256 usdtReceived = amounts[1];
+              require(usdtReceived > 0, "Swap resulted in 0 USDT");
+
+              usdt.approve(address(perpDex), usdtReceived);
+              IPerpDex.OpenPositionData memory positionData = _buildShortPositionData(usdtReceived);
+              perpDex.openPosition(positionData);
+          }
+
+          userTotalDeposits[msg.sender] += totalDeposit;
+          totalKaiADeposited += totalDeposit;
+
+          emit StrategyExecuted(msg.sender, totalDeposit, amountToStake, amountToSwap);
+      }
+
+      /**
+       * @notice [Owner only] Updates the addresses of the integrated external protocols.
+       * @dev Allows for migrating to new contract versions or different protocols.
+       * @param _newStKaia The new stKAIA contract address.
+       * @param _newPerpDex The new PerpDEX contract address.
+       * @param _newKlaySwap The new DEX contract address.
+       * @param _newUsdt The new USDT token address.
+       */
+      function updateProtocolAddresses(
+          address _newStKaia,
+          address _newPerpDex,
+          address _newKlaySwap,
+          address _newUsdt
+      ) external onlyOwner {
+          require(
+              _newStKaia != address(0) &&
+              _newPerpDex != address(0) &&
+              _newKlaySwap != address(0) &&
+              _newUsdt != address(0),
+              "Address cannot be zero"
+          );
+
+          stKaia = IStKaia(_newStKaia);
+          perpDex = IPerpDex(_newPerpDex);
+          klaySwap = IKlaySwap(_newKlaySwap);
+          usdt = IERC20(_newUsdt);
+
+          emit ProtocolAddressesUpdated(_newStKaia, _newPerpDex, _newKlaySwap, _newUsdt);
+      }
+
+      function _buildShortPositionData(uint256 _usdtMargin) internal pure returns (IPerpDex.OpenPositionData memory) {
+          IPerpDex.OraclePrices memory prices; // Empty for testing
+          return IPerpDex.OpenPositionData({
+              tokenType: IPerpDex.TokenType.Btc,
+              marginAmount: _usdtMargin,
+              leverage: 3,
+              long: false,
+              trader: address(this),
+              priceData: prices,
+              tpPrice: 0,
+              slPrice: 0,
+              expectedPrice: 0,
+              userSignedData: ""
+          });
+      }
+
+  }
+  test/HybridStrategyManager.t.sol (테스트 코드)// SPDX-License-Identifier: MIT
+  pragma solidity ^0.8.20;
+
+import "forge-std/Test.sol";
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "../src/HybridStrategyManager.sol";
+import "../src/test/MockStKaia.sol";
+import "../src/test/MockPerpDex.sol";
+import "../src/test/MockKlaySwap.sol";
+
+contract MockUSDT is ERC20 {
+constructor() ERC20("Mock USDT", "mUSDT") {}
+function mint(address to, uint256 amount) public { \_mint(to, amount); }
+}
+
+contract HybridStrategyManagerTest is Test {
+HybridStrategyManager public manager;
+MockStKaia public mockStKaia;
+MockPerpDex public mockPerpDex;
+MockKlaySwap public mockKlaySwap;
+MockUSDT public mockUsdt;
+
+    address public owner = makeAddr("owner");
+    address public user = makeAddr("user");
+
+    function setUp() public {
+        mockStKaia = new MockStKaia();
+        mockUsdt = new MockUSDT();
+        mockPerpDex = new MockPerpDex(address(mockUsdt));
+        mockKlaySwap = new MockKlaySwap(address(mockUsdt));
+        manager = new HybridStrategyManager(
+            address(mockStKaia),
+            address(mockPerpDex),
+            address(mockKlaySwap),
+            address(mockUsdt),
+            owner
+        );
+    }
+
+    function test_deposit_ExecutesBothStrategiesCorrectly() public {
+        uint256 totalDeposit = 100 ether;
+        vm.deal(user, totalDeposit);
+        uint256 expectedStakeAmount = totalDeposit / 2;
+        uint256 expectedSwapAmount = totalDeposit - expectedStakeAmount;
+        uint256 expectedUsdtReceived = (expectedSwapAmount * mockKlaySwap.KAIA_TO_USDT_RATE()) / 1 ether;
+
+        vm.prank(user);
+        manager.deposit{value: totalDeposit}();
+
+        assertEq(manager.totalKaiADeposited(), totalDeposit);
+        assertEq(manager.userTotalDeposits(user), totalDeposit);
+        assertEq(mockStKaia.balanceOf(address(manager)), expectedStakeAmount);
+        assertEq(address(mockPerpDex).balance, 0); // PerpDex receives USDT, not KAIA
+        assertEq(mockUsdt.balanceOf(address(mockPerpDex)), expectedUsdtReceived);
+    }
+
+    function test_UpdateProtocolAddresses_Success() public {
+        address newStKaia = makeAddr("newStKaia");
+        address newPerpDex = makeAddr("newPerpDex");
+        address newKlaySwap = makeAddr("newKlaySwap");
+        address newUsdt = makeAddr("newUsdt");
+
+        vm.prank(owner);
+        manager.updateProtocolAddresses(newStKaia, newPerpDex, newKlaySwap, newUsdt);
+
+        assertEq(address(manager.stKaia()), newStKaia);
+        assertEq(address(manager.perpDex()), newPerpDex);
+        assertEq(address(manager.klaySwap()), newKlaySwap);
+        assertEq(address(manager.usdt()), newUsdt);
+    }
+
+    function test_Fail_UpdateProtocolAddresses_NotOwner() public {
+        address newStKaia = makeAddr("newStKaia");
+        address newPerpDex = makeAddr("newPerpDex");
+        address newKlaySwap = makeAddr("newKlaySwap");
+        address newUsdt = makeAddr("newUsdt");
+
+        vm.prank(user); // Non-owner
+        vm.expectRevert("Ownable: caller is not the owner");
+        manager.updateProtocolAddresses(newStKaia, newPerpDex, newKlaySwap, newUsdt);
+    }
+
+}
+(테스트를 위한 모의 컨트랙트 파일들은 이전 답변과 동일하며, 명세의 간결성을 위해 생략합니다.)2.4. 테스트 및 배포1. 컴파일 및 테스트:프로젝트 루트 디렉터리에서 아래 명령어를 실행하여 모든 컨트랙트를 컴파일하고, 작성된 테스트가 성공적으로 통과하는지 확인합니다.# 컴파일
+forge build
+
+# 테스트 실행
+
+forge test 2. 배포:테스트가 완료되면, script/DeployHybridStrategyManager.s.sol 파일 내의 주소들을 배포하려는 네트워크(예: Baobab 테스트넷)의 실제 컨트랙트 주소들로 수정한 후, 아래 명령어를 통해 배포를 진행합니다.forge script script/DeployHybridStrategyManager.s.sol --rpc-url <your_kaia_rpc_url> --private-key <your_private_key> --broadcast

@@ -1,0 +1,63 @@
+하이브리드 전략 컨트랙트: 구현 가이드
+이 문서는 사용자가 KAIA를 예치하면 50%는 stKAIA에 스테이킹하고, 50%는 USDT로 스왑하여 PerpDEX에 숏 포지션을 오픈하는 HybridStrategyManager 컨트랙트의 아키텍처와 구현 방법을 안내합니다.
+
+1. 시스템 아키텍처
+워크플로우:
+
+사용자: deposit 함수를 호출하며 KAIA를 HybridStrategyManager로 전송합니다.
+
+HybridStrategyManager:
+a.  받은 KAIA의 50%를 IStKaia 컨트랙트의 stakeFor 함수를 호출하여 stKAIA로 스테이킹합니다.
+b.  나머지 50%의 KAIA를 IKlaySwap과 같은 DEX를 통해 USDT로 스왑합니다.
+c.  스왑으로 얻은 USDT 전액을 IPerpDex 컨트랙트에 approve합니다.
+d.  IPerpDex의 openPosition 함수를 호출하여 비트코인(BTC)에 대한 숏(short) 포지션을 오픈합니다. (예시: 3배 레버리지)
+
+결과: 컨트랙트는 stKAIA와 PerpDEX의 숏 포지션을 동시에 보유하게 됩니다.
+
+2. 핵심 구성 요소
+HybridStrategyManager.sol: 모든 로직의 중심이 되는 메인 컨트랙트입니다.
+
+인터페이스:
+
+IStKaia.sol: stKAIA 스테이킹을 위한 인터페이스.
+
+IPerpDex.sol: PerpDEX 포지션 관리를 위한 인터페이스.
+
+IKlaySwap.sol: KAIA를 USDT로 스왑하기 위한 DEX 인터페이스.
+
+IERC20.sol: USDT approve를 위한 표준 ERC20 인터페이스.
+
+모의(Mock) 컨트랙트:
+
+MockStKaia.sol, MockPerpDex.sol, MockKlaySwap.sol: 각 외부 프로토콜의 동작을 시뮬레이션하여 독립적인 로컬 테스트를 가능하게 합니다.
+
+3. Foundry 프로젝트 설정 및 구현 단계
+단계 1: 종속성 설치
+프로젝트 루트에서 OpenZeppelin 라이브러리를 설치합니다.
+
+forge install OpenZeppelin/openzeppelin-contracts
+
+단계 2: 인터페이스 및 모의 컨트랙트 생성
+src/interfaces/ 디렉터리에 IPerpDex.sol, IKlaySwap.sol을 추가합니다. (IStKaia.sol과 IERC20.sol은 OpenZeppelin 라이브러리 경로를 활용할 수 있습니다.)
+
+src/test/ 디렉터리에 MockPerpDex.sol, MockKlaySwap.sol을 추가합니다.
+
+단계 3: 메인 컨트랙트 작성
+src/HybridStrategyManager.sol 파일을 생성하고 제공된 코드를 붙여넣습니다. 이 컨트랙트는 두 가지 전략을 동시에 실행하는 deposit 함수를 핵심으로 합니다.
+
+단계 4: 배포 스크립트 작성
+script/DeployHybridStrategyManager.s.sol 파일을 생성합니다. 배포 전, 스크립트 내의 ST_KAIA_ADDRESS, PERP_DEX_ADDRESS, KLAY_SWAP_ADDRESS를 실제 네트워크의 주소로 반드시 수정해야 합니다.
+
+단계 5: 테스트 코드 작성
+test/HybridStrategyManager.t.sol 파일을 생성합니다. 이 테스트 코드는 모든 외부 의존성을 모의 컨트랙트로 대체하여 deposit 로직이 정확히 50:50으로 자금을 분배하고 각 프로토콜 함수를 올바르게 호출하는지 검증합니다.
+
+단계 6: 컴파일 및 테스트
+아래 명령어를 실행하여 프로젝트가 성공적으로 컴파일되고 모든 테스트를 통과하는지 확인합니다.
+
+forge build
+forge test
+
+단계 7: 배포
+테스트가 완료되면 아래 명령어를 사용하여 실제 네트워크에 배포할 수 있습니다.
+
+forge script script/DeployHybridStrategyManager.s.sol --rpc-url <your_kaia_rpc_url> --private-key <your_private_key> --broadcast

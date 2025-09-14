@@ -1,0 +1,129 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "./interfaces/IStKaia.sol";
+import "./interfaces/IPerpDex.sol";
+import "./interfaces/IKlaySwap.sol";
+
+/**
+ * @title HybridStrategyManager
+ * @notice Manages a hybrid DeFi strategy: 50% liquid staking with stKAIA and 50% shorting BTC on a PerpDEX.
+ * @dev This contract handles KAIA deposits, splits them, and interacts with external protocols.
+ */
+contract HybridStrategyManager is Ownable, ReentrancyGuard {
+    // --- External Protocol Contracts ---
+    IStKaia public immutable ST_KAIA;
+    IPerpDex public immutable PERP_DEX;
+    IKlaySwap public immutable KLAY_SWAP;
+    IERC20 public immutable USDT;
+
+    // --- State Variables ---
+    mapping(address => uint256) public userTotalDeposits;
+    uint256 public totalKaiADeposited;
+
+    // --- Events ---
+    event StrategyExecuted(
+        address indexed user,
+        uint256 totalDeposit,
+        uint256 amountToStake,
+        uint256 amountToShort
+    );
+
+    /**
+     * @notice Sets up the contract with addresses of external protocols.
+     * @param _stKaiaAddress Address of the stKAIA contract.
+     * @param _perpDexAddress Address of the PerpDEX contract.
+     * @param _klaySwapAddress Address of the KlaySwap (or equivalent DEX) contract.
+     * @param _usdtAddress Address of the USDT token contract.
+     * @param _initialOwner The initial owner of this contract.
+     */
+    constructor(
+        address _stKaiaAddress,
+        address _perpDexAddress,
+        address _klaySwapAddress,
+        address _usdtAddress,
+        address _initialOwner
+    ) Ownable(_initialOwner) {
+        ST_KAIA = IStKaia(_stKaiaAddress);
+        PERP_DEX = IPerpDex(_perpDexAddress);
+        KLAY_SWAP = IKlaySwap(_klaySwapAddress);
+        USDT = IERC20(_usdtAddress);
+    }
+
+    /**
+     * @notice Main deposit function to execute the hybrid strategy.
+     * @dev Accepts KAIA, splits it 50/50. 50% is staked into stKAIA. 50% is swapped to
+     * USDT and used to open a 3x leveraged short position on BTC via the PerpDEX.
+     */
+    function deposit() external payable nonReentrant {
+        uint256 totalDeposit = msg.value;
+        require(totalDeposit > 0, "Deposit must be > 0");
+
+        // --- Calculate 50/50 split ---
+        uint256 amountToStake = totalDeposit / 2;
+        uint256 amountToSwap = totalDeposit - amountToStake;
+
+        // --- 1. Liquid Staking Strategy ---
+        if (amountToStake > 0) {
+            ST_KAIA.stakeFor{value: amountToStake}(address(this));
+        }
+
+        // --- 2. PerpDEX Short Strategy ---
+        if (amountToSwap > 0) {
+            // a. Swap KAIA for USDT
+            address[] memory path = new address[](2);
+            path[0] = 0x0000000000000000000000000000000000000000; // Represents KAIA/KLAY in KlaySwap
+            path[1] = address(USDT);
+
+            uint[] memory amounts = KLAY_SWAP.swapExactKLAYForTokens{value: amountToSwap}(
+                0, // amountOutMin: accept any amount for simplicity
+                path,
+                address(this),
+                block.timestamp
+            );
+            uint256 usdtReceived = amounts[1];
+            require(usdtReceived > 0, "Swap resulted in 0 USDT");
+
+            // b. Approve PerpDEX to spend USDT
+            USDT.approve(address(PERP_DEX), usdtReceived);
+
+            // c. Open short position
+            IPerpDex.OpenPositionData memory positionData = _buildShortPositionData(usdtReceived);
+            PERP_DEX.openPosition(positionData);
+        }
+
+        // --- Update State ---
+        userTotalDeposits[msg.sender] += totalDeposit;
+        totalKaiADeposited += totalDeposit;
+
+        emit StrategyExecuted(msg.sender, totalDeposit, amountToStake, amountToSwap);
+    }
+    
+    /**
+     * @dev Helper function to construct the data for opening a short position.
+     * @param _usdtMargin The amount of USDT to be used as margin.
+     * @return The configured OpenPositionData struct.
+     */
+    function _buildShortPositionData(uint256 _usdtMargin) internal pure returns (IPerpDex.OpenPositionData memory) {
+        // This is a placeholder for oracle data. In a real scenario, this would be
+        // provided by a trusted off-chain source. For testing, we use empty values.
+        IPerpDex.OraclePrices memory prices;
+
+        return IPerpDex.OpenPositionData({
+            tokenType: IPerpDex.TokenType.Btc, // Shorting BTC
+            marginAmount: _usdtMargin,         // The swapped USDT amount
+            leverage: 3,                       // 3x leverage
+            long: false,                       // This is a short position
+            trader: address(this),             // This contract is the trader
+            priceData: prices,                 // Empty for mock/simplified use
+            tpPrice: 0,                        // No take-profit
+            slPrice: 0,                        // No stop-loss
+            expectedPrice: 0,                  // No specific price expectation
+            userSignedData: ""                 // No user signature needed as we are an admin/direct caller
+        });
+    }
+}
+
