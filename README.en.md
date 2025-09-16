@@ -1,6 +1,6 @@
-# SynteKaia: Delta Neutral Vault Strategy
+# SyntheKaia: Delta Neutral Vault Strategy
 
-SynteKaia is a sophisticated decentralized finance (DeFi) vault built on the Kaia network that implements a delta-neutral investment strategy. It accepts USDT deposits and automatically executes a dual-strategy approach to generate yield while maintaining market neutrality through strategic hedging.
+SyntheKaia is a sophisticated decentralized finance (DeFi) vault built on the Kaia network that implements a delta-neutral investment strategy. It accepts USDT deposits and automatically executes a dual-strategy approach to generate yield while maintaining market neutrality through strategic hedging.
 
 ## Core Strategy
 

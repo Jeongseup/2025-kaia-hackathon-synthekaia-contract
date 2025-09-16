@@ -1,12 +1,12 @@
-# GEMINI Project Brief: SynteKaia - Delta Neutral Vault Strategy
+# GEMINI Project Brief: SyntheKaia - Delta Neutral Vault Strategy
 
-This document outlines the requirements for the SynteKaia project, organized for the Gemini AI assistant.
+This document outlines the requirements for the SyntheKaia project, organized for the Gemini AI assistant.
 
 ## 1. PM (Project Management) View
 
 ### 1.1. Project Overview
 
-- **Project Name:** SynteKaia (Stkaia Delta Neutral Vault)
+- **Project Name:** SyntheKaia (Stkaia Delta Neutral Vault)
 - **Core Concept:** A sophisticated DeFi vault that implements a delta-neutral strategy by accepting USDT deposits and simultaneously executing two complementary strategies: **Liquid Staking** (converting 50% USDT to stKAIA) and **Perpetual Futures Short Position** (using remaining 50% USDT as margin for leveraged short positions on K-bit PerpDEX).
 - **Target Audience:**
   - USDT holders seeking delta-neutral yield strategies on the Kaia network.

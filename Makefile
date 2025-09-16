@@ -1,4 +1,4 @@
-# Makefile for the SynteKaia Project
+# Makefile for the SyntheKaia Project
 
 # Load environment variables from .env file.
 # The script will fail gracefully if .env does not exist.
@@ -9,6 +9,7 @@
 # e.g., make deploy KAIA_RPC_URL=https://my-custom-rpc.com
 KAIA_RPC_URL ?= "YOUR_KAIA_RPC_URL_HERE"
 PRIVATE_KEY ?= "YOUR_PRIVATE_KEY_HERE"
+TEST_USER_ADDRESS ?= "YOUR_TEST_USER_ADDRESS_HERE"
 
 # The addresses for ST_KAIA, PERP_DEX, etc., are read directly by the
 # deploy script from the .env file, so they don't need to be defined here.
@@ -21,7 +22,7 @@ PRIVATE_KEY ?= "YOUR_PRIVATE_KEY_HERE"
 
 help:
 	@echo "Usage:"
-	@echo "  make deploy       Deploy the HybridStrategyManager contract to the configured network."
+	@echo "  make deploy      Deploy the StkaiaDeltaNeutralVault contract and dependencies."
 	@echo "  make build        Compile the smart contracts."
 	@echo "  make test         Run the Foundry test suite."
 	@echo "  make clean        Remove the build artifacts and cache."
@@ -37,12 +38,16 @@ deploy:
 		echo "Error: PRIVATE_KEY is not set. Please define it in your .env file."; \
 		exit 1; \
 	fi
-	@echo "Deploying HybridStrategyManager contract..."
-	@# Execute the deployment script using configured variables.
-	@forge script script/DeployHybridStrategyManager.s.sol \
+	@if [ -z "$(TEST_USER_ADDRESS)" ]; then \
+		echo "Error: TEST_USER_ADDRESS is not set. Please define it in your .env file."; \
+		exit 1; \
+	fi
+	@echo "Deploying StkaiaDeltaNeutralVault contract and dependencies..."
+	@# Execute the vault deployment script using configured variables.
+	@forge script script/DeployVault.s.sol:DeployVault \
 		--rpc-url $(KAIA_RPC_URL) \
 		--private-key $(PRIVATE_KEY) \
-		--broadcast --verify -vvvv
+		--broadcast -vvvv
 
 build:
 	@echo "Building contracts..."
