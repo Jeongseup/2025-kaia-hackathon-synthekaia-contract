@@ -28,6 +28,12 @@ help:
 	@echo "  make clean        Remove the build artifacts and cache."
 	@echo "  make fmt          Format the Solidity code using forge fmt."
 
+balances:
+	@echo "Checking balances..."
+	@forge script script/Balances.s.sol:Balances \
+		--rpc-url $(KAIA_RPC_URL) \
+		-v
+
 deploy:
 	@# Check if essential variables are set before proceeding.
 	@if [ -z "$(KAIA_RPC_URL)" ] || [ "$(KAIA_RPC_URL)" = "YOUR_KAIA_RPC_URL_HERE" ]; then \
