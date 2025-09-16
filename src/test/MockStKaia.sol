@@ -14,20 +14,38 @@ contract MockStKaia is IStKaia, ERC20 {
 
     constructor() ERC20("Mock stKAIA", "mstKAIA") {}
 
-    function stakeFor(address recipient) external payable override {
-        _mint(recipient, msg.value);
-        emit Staked(recipient, msg.value);
-    }
-
     function stake() external payable override {
         // 1. something internal staking logic
         // _stake()
 
         // 2. mint mock stKAIA token and send to staker
-        super._mint(tx.origin, msg.value);
+        _mint(msg.sender, msg.value);
 
         // 3. emit event
-        emit Staked(tx.origin, msg.value);
+        emit Staked(msg.sender, msg.value);
+    }
+
+    function stakeFor(address recipient) external payable override {
+        // 1. something internal staking logic
+        // _stake()
+
+        // 2. mint mock stKAIA token and send to staker
+        _mint(recipient, msg.value);
+
+        // 3. emit event
+        emit Staked(recipient, msg.value);
+    }
+
+    function unstake(uint256 amount) external override {
+        // 1. burn mock stKAIA token from sender
+        super._burn(msg.sender, amount);
+
+        // 2. something internal unstaking logic
+        // _unstake()
+
+        // 3. send KLAY back to sender
+        (bool success, ) = msg.sender.call{value: amount}("");
+        require(success, "KLAY transfer failed");
     }
 
     function balanceOf(

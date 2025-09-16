@@ -11,8 +11,8 @@ When a user deposits KAIA into the `HybridStrategyManager` contract, the funds a
 
 ## Tech Stack
 
--   **Smart Contracts**: Solidity
--   **Development Framework**: Foundry
+- **Smart Contracts**: Solidity
+- **Development Framework**: Foundry
 
 ## Project Structure
 
@@ -37,11 +37,12 @@ The project is organized with a focus on modularity and testability:
 
 ### Prerequisites
 
--   [Foundry](https://book.getfoundry.sh/getting-started/installation) must be installed.
+- [Foundry](https://book.getfoundry.sh/getting-started/installation) must be installed.
 
 ### Installation
 
 1.  Clone the repository:
+
     ```bash
     git clone <your-repo-url>
     cd 2025-hackathon-kaia-syntekaia-contract
@@ -78,20 +79,20 @@ USDT_ADDRESS="0x..."
 
 This project uses a `Makefile` to provide simple shortcuts for the most common tasks.
 
--   **`make build`**
-    Compile all smart contracts in the project.
+- **`make build`**
+  Compile all smart contracts in the project.
 
--   **`make test`**
-    Run the Foundry test suite. This uses mock contracts to verify the core logic in a local environment.
+- **`make test`**
+  Run the Foundry test suite. This uses mock contracts to verify the core logic in a local environment.
 
--   **`make fmt`**
-    Format the Solidity code using `forge fmt`.
+- **`make fmt`**
+  Format the Solidity code using `forge fmt`.
 
--   **`make clean`**
-    Remove the build artifacts (`out/`) and cache directories.
+- **`make clean`**
+  Remove the build artifacts (`out/`) and cache directories.
 
--   **`make deploy`**
-    Deploy the `HybridStrategyManager` contract to the network specified in your `.env` file. This command will fail with an error if `KAIA_RPC_URL` or `PRIVATE_KEY` are not set.
+- **`make deploy`**
+  Deploy the `HybridStrategyManager` contract to the network specified in your `.env` file. This command will fail with an error if `KAIA_RPC_URL` or `PRIVATE_KEY` are not set.
 
 ## Testing
 
@@ -115,3 +116,8 @@ make test
 ## License
 
 This project is licensed under the MIT License.
+
+## References
+
+- stKAIA Contract: https://github.com/stakely-protocol/stakely-core/tree/main
+- perpDEX Contract: https://github.com/devKBit/k-bit

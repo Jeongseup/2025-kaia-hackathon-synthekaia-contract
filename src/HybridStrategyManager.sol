@@ -67,27 +67,26 @@ contract HybridStrategyManager is Ownable, ReentrancyGuard {
 
         // --- 1. Liquid Staking Strategy ---
         if (amountToStake > 0) {
-            stKaia.stake{value: amountToStake}();
+            stKaia.stakeFor{value: amountToStake}(msg.sender);
         }
 
-        // NOTE: SKIPPED FOR TESTING PURPOSES
-        // // --- 2. PerpDEX Short Strategy ---
-        // if (amountToSwap > 0) {
-        //     address[] memory path = new address[](2);
-        //     path[0] = wkaia;
-        //     path[1] = address(usdt);
+        // --- 2. PerpDEX Short Strategy ---
+        if (amountToSwap > 0) {
+            address[] memory path = new address[](2);
+            path[0] = wkaia;
+            path[1] = address(usdt);
 
-        //     uint[] memory amounts = klaySwap.swapExactKlayForTokens{
-        //         value: amountToSwap
-        //     }(0, path, address(this), block.timestamp);
-        //     uint256 usdtReceived = amounts[1];
-        //     require(usdtReceived > 0, "Swap resulted in 0 USDT");
+            uint[] memory amounts = klaySwap.swapExactKlayForTokens{
+                value: amountToSwap
+            }(0, path, address(this), block.timestamp);
+            uint256 usdtReceived = amounts[1];
+            require(usdtReceived > 0, "Swap resulted in 0 USDT");
 
-        //     usdt.approve(address(perpDex), usdtReceived);
-        //     IPerpDex.OpenPositionData
-        //         memory positionData = _buildShortPositionData(usdtReceived);
-        //     perpDex.openPosition(positionData);
-        // }
+            usdt.approve(address(perpDex), usdtReceived);
+            IPerpDex.OpenPositionData
+                memory positionData = _buildShortPositionData(usdtReceived);
+            perpDex.openPosition(positionData);
+        }
 
         userTotalDeposits[msg.sender] += totalDeposit;
         totalKaiADeposited += totalDeposit;

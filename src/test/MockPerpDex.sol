@@ -10,29 +10,52 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
  */
 contract MockPerpDex is IPerpDex {
     IERC20 public usdt;
-    uint256 public lastPositionId = 0;
+    uint256 public nextPositionId = 1;
 
-    // Stores the details of the last opened position for verification in tests.
-    OpenPositionData public lastOpenPositionData;
+    // --- Events ---
+    event PositionOpened(
+        uint256 indexed positionId,
+        address indexed trader,
+        TokenType tokenType,
+        uint256 margin,
+        uint256 size,
+        uint256 initialPrice,
+        bool isLong,
+        uint256 tpPrice,
+        uint256 slPrice
+    );
+
+    // --- State ---
+    mapping(uint256 => OpenPositionData) public positions;
 
     constructor(address _usdtAddress) {
         usdt = IERC20(_usdtAddress);
     }
 
     /**
-     * @notice Simulates opening a position. It captures the input data and
-     * transfers the margin amount from the caller to itself.
+     * @notice Simulates opening a position. It captures the input data, stores it
+     * against a new position ID, and transfers the margin from the caller.
      */
     function openPosition(OpenPositionData calldata o) external payable override {
-        lastOpenPositionData = o;
-        lastPositionId++;
+        uint256 positionId = nextPositionId++;
+        positions[positionId] = o;
 
-        // Simulate pulling the margin from the caller.
+        // Simulate pulling the margin from the HybridStrategyManager contract.
         if (o.marginAmount > 0) {
-            require(
-                usdt.transferFrom(msg.sender, address(this), o.marginAmount),
-                "transferFrom failed"
-            );
+            usdt.transferFrom(msg.sender, address(this), o.marginAmount);
         }
+
+        // Emit an event to mimic the real contract's behavior.
+        emit PositionOpened(
+            positionId,
+            o.trader,
+            o.tokenType,
+            o.marginAmount,
+            o.marginAmount * o.leverage, // Mock size calculation
+            o.expectedPrice,
+            o.long,
+            o.tpPrice,
+            o.slPrice
+        );
     }
 }

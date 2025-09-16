@@ -54,11 +54,15 @@ contract HybridStrategyManagerTest is Test {
         // Expected results
         uint256 expectedStakeAmount = totalDeposit / 2;
 
+        // Simulate user depositing funds
         vm.broadcast(user);
         manager.deposit{value: totalDeposit}();
 
+        // Result 1: Half of the deposit is staked in StKaia
         assertEq(manager.totalKaiADeposited(), totalDeposit);
         assertEq(manager.userTotalDeposits(user), totalDeposit);
         assertEq(mockStKaia.balanceOf(address(user)), expectedStakeAmount);
+
+        // Result 2: Half of the deposit is used to open a position on PerpDex
     }
 }
