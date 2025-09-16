@@ -6,9 +6,9 @@ This document outlines the requirements for the SynteKaia project, organized for
 
 ### 1.1. Project Overview
 - **Project Name:** SynteKaia (also known as Hybrid DeFi Strategy Vault)
-- **Core Concept:** A hybrid DeFi product that leverages a user's deposited KAIA assets to simultaneously generate stable interest income through **Liquid Staking** and hedge against market downturns while seeking additional returns via a **Perpetual Futures Short Position**.
+- **Core Concept:** A hybrid DeFi product that leverages a user's deposited USDT assets to simultaneously generate stable interest income through **Liquid Staking** (by converting half of the USDT to KAIA and staking it) and hedge against market downturns while seeking additional returns via a **Perpetual Futures Short Position**.
 - **Target Audience:**
-    - KAIA holders seeking diversified yield strategies beyond simple staking.
+    - USDT holders seeking diversified yield strategies on the Kaia network.
     - DeFi investors interested in hedging against market volatility.
 
 ### 1.2. Core Features & Strategy
