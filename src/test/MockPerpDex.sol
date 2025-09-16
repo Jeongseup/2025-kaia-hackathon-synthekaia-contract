@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "../interfaces/IPerpDex.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { IPerpDex } from "../interfaces/IPerpDex.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /**
  * @title MockPerpDex
@@ -11,7 +11,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 contract MockPerpDex is IPerpDex {
     IERC20 public usdt;
     uint256 public lastPositionId = 0;
-    
+
     // Stores the details of the last opened position for verification in tests.
     OpenPositionData public lastOpenPositionData;
 
@@ -26,10 +26,13 @@ contract MockPerpDex is IPerpDex {
     function openPosition(OpenPositionData calldata o) external payable override {
         lastOpenPositionData = o;
         lastPositionId++;
-        
+
         // Simulate pulling the margin from the caller.
         if (o.marginAmount > 0) {
-            usdt.transferFrom(msg.sender, address(this), o.marginAmount);
+            require(
+                usdt.transferFrom(msg.sender, address(this), o.marginAmount),
+                "transferFrom failed"
+            );
         }
     }
 }

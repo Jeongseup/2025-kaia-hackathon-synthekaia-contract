@@ -6,7 +6,7 @@
 - @dev Simplified interface for a DEX like KlaySwap.
   */
   interface IKlaySwap {
-  function swapExactKLAYForTokens(
+  function swapExactKlayForTokens(
   uint amountOutMin,
   address[] calldata path,
   address to,

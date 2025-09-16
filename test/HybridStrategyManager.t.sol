@@ -1,25 +1,28 @@
 // SPDX-License-Identifier: MIT
-  pragma solidity ^0.8.20;
+pragma solidity ^0.8.20;
 
-import "forge-std/Test.sol";
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "../src/HybridStrategyManager.sol";
-import "../src/test/MockStKaia.sol";
-import "../src/test/MockPerpDex.sol";
-import "../src/test/MockKlaySwap.sol";
+import { Test } from "forge-std/Test.sol";
+import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
+import { HybridStrategyManager } from "../src/HybridStrategyManager.sol";
+import { MockStKaia } from "../src/test/MockStKaia.sol";
+import { MockPerpDex } from "../src/test/MockPerpDex.sol";
+import { MockKlaySwap } from "../src/test/MockKlaySwap.sol";
 
 contract MockUSDT is ERC20 {
-constructor() ERC20("Mock USDT", "mUSDT") {}
-function mint(address to, uint256 amount) public { _mint(to, amount); }
+    constructor() ERC20("Mock USDT", "mUSDT") {}
+
+    function mint(address to, uint256 amount) public {
+        _mint(to, amount);
+    }
 }
 
 contract HybridStrategyManagerTest is Test {
-HybridStrategyManager public manager;
-MockStKaia public mockStKaia;
-MockPerpDex public mockPerpDex;
-MockKlaySwap public mockKlaySwap;
-MockUSDT public mockUsdt;
+    HybridStrategyManager public manager;
+    MockStKaia public mockStKaia;
+    MockPerpDex public mockPerpDex;
+    MockKlaySwap public mockKlaySwap;
+    MockUSDT public mockUsdt;
 
     address public owner = makeAddr("owner");
     address public user = makeAddr("user");
@@ -43,7 +46,8 @@ MockUSDT public mockUsdt;
         vm.deal(user, totalDeposit);
         uint256 expectedStakeAmount = totalDeposit / 2;
         uint256 expectedSwapAmount = totalDeposit - expectedStakeAmount;
-        uint256 expectedUsdtReceived = (expectedSwapAmount * mockKlaySwap.KAIA_TO_USDT_RATE()) / 1 ether;
+        uint256 expectedUsdtReceived = (expectedSwapAmount *
+            mockKlaySwap.KAIA_TO_USDT_RATE()) / 1 ether;
 
         vm.prank(user);
         manager.deposit{value: totalDeposit}();
@@ -52,7 +56,10 @@ MockUSDT public mockUsdt;
         assertEq(manager.userTotalDeposits(user), totalDeposit);
         assertEq(mockStKaia.balanceOf(address(manager)), expectedStakeAmount);
         assertEq(address(mockPerpDex).balance, 0); // PerpDex receives USDT, not KAIA
-        assertEq(mockUsdt.balanceOf(address(mockPerpDex)), expectedUsdtReceived);
+        assertEq(
+            mockUsdt.balanceOf(address(mockPerpDex)),
+            expectedUsdtReceived
+        );
     }
 
     function test_UpdateProtocolAddresses_Success() public {
@@ -62,7 +69,12 @@ MockUSDT public mockUsdt;
         address newUsdt = makeAddr("newUsdt");
 
         vm.prank(owner);
-        manager.updateProtocolAddresses(newStKaia, newPerpDex, newKlaySwap, newUsdt);
+        manager.updateProtocolAddresses(
+            newStKaia,
+            newPerpDex,
+            newKlaySwap,
+            newUsdt
+        );
 
         assertEq(address(manager.stKaia()), newStKaia);
         assertEq(address(manager.perpDex()), newPerpDex);
@@ -77,8 +89,17 @@ MockUSDT public mockUsdt;
         address newUsdt = makeAddr("newUsdt");
 
         vm.prank(user); // Non-owner
-        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, user));
-        manager.updateProtocolAddresses(newStKaia, newPerpDex, newKlaySwap, newUsdt);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Ownable.OwnableUnauthorizedAccount.selector,
+                user
+            )
+        );
+        manager.updateProtocolAddresses(
+            newStKaia,
+            newPerpDex,
+            newKlaySwap,
+            newUsdt
+        );
     }
-
 }

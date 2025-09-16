@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "../interfaces/IKlaySwap.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { IKlaySwap } from "../interfaces/IKlaySwap.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /**
  * @title MockKlaySwap
@@ -22,7 +22,7 @@ contract MockKlaySwap is IKlaySwap {
      * @notice Simulates swapping KAIA for USDT. It calculates the USDT amount based on a fixed rate
      * and transfers it to the recipient.
      */
-    function swapExactKLAYForTokens(
+    function swapExactKlayForTokens(
         uint amountOutMin,
         address[] calldata, // path is ignored in mock
         address to,
@@ -31,11 +31,14 @@ contract MockKlaySwap is IKlaySwap {
         uint256 kaiaAmount = msg.value;
         uint256 usdtAmount = (kaiaAmount * KAIA_TO_USDT_RATE) / 1 ether;
 
-        require(usdtAmount >= amountOutMin, "MockKlaySwap: Insufficient output amount");
+        require(
+            usdtAmount >= amountOutMin,
+            "MockKlaySwap: Insufficient output amount"
+        );
 
         // Mint mock USDT to this contract to simulate the swap pool.
         IMintable(address(usdt)).mint(address(this), usdtAmount);
-        usdt.transfer(to, usdtAmount);
+        require(usdt.transfer(to, usdtAmount), "transfer failed");
 
         amounts = new uint[](2);
         amounts[0] = kaiaAmount;
