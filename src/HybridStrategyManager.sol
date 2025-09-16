@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
-import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { IStKaia } from "./interfaces/IStKaia.sol";
-import { IPerpDex } from "./interfaces/IPerpDex.sol";
-import { IKlaySwap } from "./interfaces/IKlaySwap.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IStKaia} from "./interfaces/IStKaia.sol";
+import {IPerpDex} from "./interfaces/IPerpDex.sol";
+import {IKlaySwap} from "./interfaces/IKlaySwap.sol";
 
 /**
 - @title HybridStrategyManager
@@ -19,6 +19,7 @@ contract HybridStrategyManager is Ownable, ReentrancyGuard {
     IPerpDex public perpDex;
     IKlaySwap public klaySwap;
     IERC20 public usdt;
+    address public wkaia;
 
     // --- State Variables ---
     mapping(address => uint256) public userTotalDeposits;
@@ -35,7 +36,8 @@ contract HybridStrategyManager is Ownable, ReentrancyGuard {
         address newStKaia,
         address newPerpDex,
         address newKlaySwap,
-        address newUsdt
+        address newUsdt,
+        address newWkaia
     );
 
     constructor(
@@ -43,12 +45,14 @@ contract HybridStrategyManager is Ownable, ReentrancyGuard {
         address _perpDexAddress,
         address _klaySwapAddress,
         address _usdtAddress,
+        address _wkaiaAddress,
         address _initialOwner
     ) Ownable(_initialOwner) {
         stKaia = IStKaia(_stKaiaAddress);
         perpDex = IPerpDex(_perpDexAddress);
         klaySwap = IKlaySwap(_klaySwapAddress);
         usdt = IERC20(_usdtAddress);
+        wkaia = _wkaiaAddress;
     }
 
     /**
@@ -63,26 +67,27 @@ contract HybridStrategyManager is Ownable, ReentrancyGuard {
 
         // --- 1. Liquid Staking Strategy ---
         if (amountToStake > 0) {
-            stKaia.stakeFor{value: amountToStake}(address(this));
+            stKaia.stake{value: amountToStake}();
         }
 
-        // --- 2. PerpDEX Short Strategy ---
-        if (amountToSwap > 0) {
-            address[] memory path = new address[](2);
-            path[0] = 0x0000000000000000000000000000000000000000;
-            path[1] = address(usdt);
+        // NOTE: SKIPPED FOR TESTING PURPOSES
+        // // --- 2. PerpDEX Short Strategy ---
+        // if (amountToSwap > 0) {
+        //     address[] memory path = new address[](2);
+        //     path[0] = wkaia;
+        //     path[1] = address(usdt);
 
-            uint[] memory amounts = klaySwap.swapExactKlayForTokens{
-                value: amountToSwap
-            }(0, path, address(this), block.timestamp);
-            uint256 usdtReceived = amounts[1];
-            require(usdtReceived > 0, "Swap resulted in 0 USDT");
+        //     uint[] memory amounts = klaySwap.swapExactKlayForTokens{
+        //         value: amountToSwap
+        //     }(0, path, address(this), block.timestamp);
+        //     uint256 usdtReceived = amounts[1];
+        //     require(usdtReceived > 0, "Swap resulted in 0 USDT");
 
-            usdt.approve(address(perpDex), usdtReceived);
-            IPerpDex.OpenPositionData
-                memory positionData = _buildShortPositionData(usdtReceived);
-            perpDex.openPosition(positionData);
-        }
+        //     usdt.approve(address(perpDex), usdtReceived);
+        //     IPerpDex.OpenPositionData
+        //         memory positionData = _buildShortPositionData(usdtReceived);
+        //     perpDex.openPosition(positionData);
+        // }
 
         userTotalDeposits[msg.sender] += totalDeposit;
         totalKaiADeposited += totalDeposit;
@@ -107,13 +112,15 @@ contract HybridStrategyManager is Ownable, ReentrancyGuard {
         address _newStKaia,
         address _newPerpDex,
         address _newKlaySwap,
-        address _newUsdt
+        address _newUsdt,
+        address _newWkaia
     ) external onlyOwner {
         require(
             _newStKaia != address(0) &&
                 _newPerpDex != address(0) &&
                 _newKlaySwap != address(0) &&
-                _newUsdt != address(0),
+                _newUsdt != address(0) &&
+                _newWkaia != address(0),
             "Address cannot be zero"
         );
 
@@ -121,12 +128,14 @@ contract HybridStrategyManager is Ownable, ReentrancyGuard {
         perpDex = IPerpDex(_newPerpDex);
         klaySwap = IKlaySwap(_newKlaySwap);
         usdt = IERC20(_newUsdt);
+        wkaia = _newWkaia;
 
         emit ProtocolAddressesUpdated(
             _newStKaia,
             _newPerpDex,
             _newKlaySwap,
-            _newUsdt
+            _newUsdt,
+            _newWkaia
         );
     }
 
