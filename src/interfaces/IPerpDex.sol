@@ -57,16 +57,9 @@ interface IPerpDex {
         bytes userSignedData;
     }
 
-    // /**
-    //  * @notice 새로운 포지션을 오픈합니다.
-    //  * @param o 포지션 오픈에 필요한 데이터
-    //  */
-    // function openPosition(OpenPositionData calldata o) external payable;
-
-    function openPosition(
-        address, // _token
-        uint256, // _amount
-        uint256, // _leverage
-        bool // _isLong
-    ) external;
+    /**
+     * @notice 새로운 포지션을 오픈합니다.
+     * @param o 포지션 오픈에 필요한 데이터
+     */
+    function openPosition(OpenPositionData calldata o) external payable;
 }

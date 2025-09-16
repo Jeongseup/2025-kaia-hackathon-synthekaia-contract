@@ -1,45 +1,48 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {Test, console} from "forge-std/Test.sol";
-import {StkaiaDeltaNeutralVault} from "../src/StkaiaDeltaNeutralVault.sol";
+import {Test} from "forge-std/Test.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+
+import {StkaiaDeltaNeutralVault} from "../../src/StkaiaDeltaNeutralVault.sol";
 import {MockERC20} from "./mocks/MockERC20.sol";
 import {MockUniswapV3Router} from "./mocks/MockUniswapV3Router.sol";
 import {MockPerpDex} from "./mocks/MockPerpDex.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {IPerpDex} from "../../src/interfaces/IPerpDex.sol";
 
+/**
+ * @title StkaiaDeltaNeutralVault 테스트 스위트
+ * @notice StkaiaDeltaNeutralVault 컨트랙트의 주요 기능을 테스트합니다.
+ */
 contract StkaiaDeltaNeutralVaultTest is Test {
-    // --- 상태 변수 ---
-    StkaiaDeltaNeutralVault public vault;
-    MockERC20 public usdt;
-    MockERC20 public stKAIA;
-    MockUniswapV3Router public router;
-    MockPerpDex public perpDex;
+    StkaiaDeltaNeutralVault internal vault; // 프록시 주소를 가리키게 될 변수
+    StkaiaDeltaNeutralVault internal vaultImplementation; // 구현 컨트랙트 주소
 
-    address public owner = makeAddr("owner");
-    address public user = makeAddr("user");
+    MockERC20 internal usdt;
+    MockERC20 internal stKAIA;
+    MockUniswapV3Router internal router;
+    MockPerpDex internal perpDex;
 
-    // USDT는 6-decimals
-    uint256 public constant DEPOSIT_AMOUNT = 1000 * 1e6;
+    address internal owner;
+    address internal user;
 
-    /**
-     * @notice 각 테스트 실행 전에 실행되는 설정 함수
-     */
+    uint256 internal constant INITIAL_USER_BALANCE = 1_000_000 * 1e18;
+    uint256 internal constant INITIAL_ROUTER_STKAIA_BALANCE = 1_000_000 * 1e18;
+
     function setUp() public {
+        owner = makeAddr("owner");
+        user = makeAddr("user");
+
         // 1. Mock 컨트랙트들 배포
-        usdt = new MockERC20("Tether", "USDT", 6);
+        usdt = new MockERC20("Tether", "USDT", 18);
         stKAIA = new MockERC20("Staked KAIA", "stKAIA", 18);
         router = new MockUniswapV3Router();
         perpDex = new MockPerpDex();
 
-        // 2. 업그레이드 가능한 컨트랙트를 프록시 패턴으로 배포하고 초기화합니다.
+        // 2. Vault 구현 컨트랙트 배포
+        vaultImplementation = new StkaiaDeltaNeutralVault();
 
-        // 2-1. 로직(구현) 컨트랙트를 먼저 배포합니다.
-        StkaiaDeltaNeutralVault implementation = new StkaiaDeltaNeutralVault();
-
-        // 2-2. 프록시에 전달할 초기화 함수 호출 데이터를 생성합니다.
-        // abi.encodeWithSelector를 사용하여 `initialize(...)` 함수를 호출하는 calldata를 만듭니다.
+        // 3. 프록시 배포 및 초기화
         bytes memory initData = abi.encodeWithSelector(
             StkaiaDeltaNeutralVault.initialize.selector,
             address(usdt),
@@ -48,65 +51,114 @@ contract StkaiaDeltaNeutralVaultTest is Test {
             address(perpDex),
             owner
         );
-
-        // 2-3. 프록시 컨트랙트를 배포하고, 구현 컨트랙트 주소와 초기화 데이터를 전달합니다.
         ERC1967Proxy proxy = new ERC1967Proxy(
-            address(implementation),
+            address(vaultImplementation),
             initData
         );
-
-        // 2-4. 테스트에서는 프록시 주소를 StkaiaDeltaNeutralVault 타입으로 사용합니다.
-        // 이렇게 하면 모든 호출이 프록시를 통해 구현 컨트랙트로 전달됩니다.
         vault = StkaiaDeltaNeutralVault(address(proxy));
 
-        // 4. 테스트 유저에게 USDT 민팅
-        usdt.mint(user, DEPOSIT_AMOUNT);
+        // 4. 테스트 유저에게 초기 자금(USDT) 민팅
+        usdt.mint(user, INITIAL_USER_BALANCE);
+        stKAIA.mint(address(router), INITIAL_USER_BALANCE); // Mock Router에 충분한 stKAIA 공급
+
+        // 5. MockPerpDex에 USDT 토큰 주소 설정
+        perpDex.setUsdt(address(usdt));
     }
 
     /**
-     * @notice test_deposit: 사용자가 성공적으로 USDT를 예치하는 케이스를 테스트합니다.
+     * @notice 사용자가 deposit을 호출했을 때 올바른 수량의 쉐어가 발행되는지 테스트합니다.
      */
-    function test_Deposit() public {
-        // --- 1. Arrange (준비) ---
-        // 유저가 볼트 컨트랙트에 자신의 USDT를 사용할 수 있도록 approve 합니다.
-        vm.prank(user);
-        usdt.approve(address(vault), DEPOSIT_AMOUNT);
+    function testDeposit_IssuesShares() public {
+        uint256 depositAmount = 1000 * 1e18;
 
-        // --- 2. Act (실행) ---
-        // 유저가 deposit 함수를 호출합니다.
-        vm.prank(user);
-        uint256 shares = vault.deposit(DEPOSIT_AMOUNT, user);
+        // 사용자가 볼트에 USDT 사용을 승인합니다.
+        vm.startPrank(user);
+        usdt.approve(address(vault), depositAmount);
 
-        // --- 3. Assert (검증) ---
-        // 3-1. 유저의 USDT 잔액이 0이 되었는지 확인
-        assertEq(usdt.balanceOf(user), 0, "User USDT balance should be 0");
+        // 사용자가 deposit을 호출합니다.
+        uint256 shares = vault.deposit(depositAmount, user);
+        vm.stopPrank();
 
-        // 3-2. 볼트의 USDT 잔액이 DEPOSIT_AMOUNT와 일치하는지 확인
-        assertEq(
-            usdt.balanceOf(address(vault)),
-            DEPOSIT_AMOUNT,
-            "Vault USDT balance should be DEPOSIT_AMOUNT"
-        );
-
-        // 3-3. 유저가 받은 쉐어(shares)의 양이 올바른지 확인
-        // 첫 입금자이므로, 자산(USDT)과 쉐어는 1:1 비율이어야 합니다.
+        // 발행된 쉐어 수량이 0보다 큰지 확인합니다.
+        // 첫 입금이므로 자산과 쉐어는 1:1 비율이어야 합니다.
+        assertTrue(shares > 0);
         assertEq(
             shares,
-            DEPOSIT_AMOUNT,
-            "Returned shares should be DEPOSIT_AMOUNT"
-        );
-        assertEq(
-            vault.balanceOf(user),
-            DEPOSIT_AMOUNT,
-            "User vault share balance should be DEPOSIT_AMOUNT"
+            depositAmount,
+            "Shares should be equal to assets on initial deposit"
         );
 
-        // 3-4. 볼트의 총 자산(totalAssets)이 올바르게 계산되었는지 확인
+        // 사용자의 USDT 잔액이 감소했는지 확인합니다.
         assertEq(
-            vault.totalAssets(),
-            DEPOSIT_AMOUNT,
-            "Vault totalAssets should be DEPOSIT_AMOUNT"
+            usdt.balanceOf(user),
+            INITIAL_USER_BALANCE - depositAmount,
+            "User USDT balance should decrease"
         );
+    }
+
+    /**
+     * @notice 사용자의 deposit이 _executeStrategy를 올바르게 트리거하는지 테스트합니다.
+     */
+    function testDeposit_Triggers_ExecuteStrategy() public {
+        // --- 1. Arrange ---
+        uint256 depositAmount = 2000 * 1e18;
+        uint256 amountToSwap = depositAmount / 2;
+        uint256 amountToShort = depositAmount - amountToSwap;
+
+        // Mock Uniswap 라우터가 스왑의 결과로 반환할 stKAIA 수량을 설정합니다.
+        // 1 USDT = 0.98 stKAIA 라고 가정
+        uint256 expectedStKAIAOut = (amountToSwap * 98) / 100;
+        router.setExpectedAmountOut(expectedStKAIAOut);
+
+        // 유저가 볼트 컨트랙트에 입금할 금액을 approve합니다.
+        vm.prank(user);
+        usdt.approve(address(vault), depositAmount);
+
+        // --- 2. Act ---
+
+        // StrategyExecuted 이벤트가 올바른 파라미터로 발생하는지 검사하도록 설정합니다.
+        vm.expectEmit(true, true, true, true);
+        emit StkaiaDeltaNeutralVault.StrategyExecuted(
+            depositAmount,
+            amountToSwap,
+            amountToShort,
+            expectedStKAIAOut
+        );
+
+        // 유저가 deposit 함수를 호출합니다.
+        vm.prank(user);
+        vault.deposit(depositAmount, user);
+
+        // --- 3. Assert ---
+
+        // Vault가 스왑 결과로 stKAIA를 받았는지 확인합니다.
+        assertEq(
+            stKAIA.balanceOf(address(vault)),
+            expectedStKAIAOut,
+            "Vault should receive stKAIA after swap"
+        );
+
+        // Vault의 USDT 잔액이 0인지 확인합니다 (전략에 모두 사용되었으므로).
+        assertEq(
+            usdt.balanceOf(address(vault)),
+            0,
+            "Vault USDT balance should be 0 after strategy execution"
+        );
+
+        // Mock PerpDex의 상태를 확인하여 openPosition이 올바른 값으로 호출되었는지 검증합니다.
+        IPerpDex.OpenPositionData memory lastPosition = perpDex
+            .getLastOpenPositionData();
+        assertEq(
+            lastPosition.marginAmount,
+            amountToShort,
+            "PerpDex marginAmount is incorrect"
+        );
+        assertEq(
+            uint256(lastPosition.tokenType),
+            uint256(IPerpDex.TokenType.Klay),
+            "PerpDex tokenType is incorrect"
+        );
+        assertEq(lastPosition.long, false, "Position should be short");
     }
 
     /**
@@ -114,7 +166,6 @@ contract StkaiaDeltaNeutralVaultTest is Test {
      */
     function test_fail_DepositZero() public {
         // deposit 함수는 0개의 자산을 예치할 경우 revert되어야 합니다.
-        // (ERC4626 표준에서는 0-asset deposit을 허용할 수도 있지만, _executeStrategy 에서는 0보다 커야 하므로 여기서 막히는 것이 합리적입니다.)
         vm.prank(user);
         vm.expectRevert("Vault: amount must be > 0");
         vault.deposit(0, user);

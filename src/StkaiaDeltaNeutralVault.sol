@@ -32,11 +32,17 @@ contract StkaiaDeltaNeutralVault is
     IUniswapV3Router public uniswapRouter;
     IPerpDex public perpDex;
     IERC20 public stKAIA;
-    IERC20 public usdt;
+
+    // --- 전략 설정 변수 ---
+    uint24 public swapFee; // Uniswap V3 풀의 수수료 (e.g., 3000 for 0.3%)
+    uint256 public leverage; // 숏 포지션 레버리지 (e.g., 2 * 1e18 for 2x)
+    IPerpDex.TokenType public perpDexTokenType; // K-bit DEX에서 거래할 토큰 타입
 
     // --- 이벤트 ---
     event StrategyExecuted(
-        uint256 usdtAmountUsed,
+        uint256 totalUsdtAmount,
+        uint256 amountSwapped,
+        uint256 amountShorted,
         uint256 stKAIAAmountReceived
     );
 
@@ -60,18 +66,19 @@ contract StkaiaDeltaNeutralVault is
         address _perpDex,
         address _initialOwner
     ) public initializer {
-        // 부모 컨트랙트들 초기화
         __ERC4626_init(IERC20(_asset));
         __ERC20_init("Stkaia Delta Neutral Vault Share", "sdnVS");
         __Ownable_init(_initialOwner);
         __Pausable_init();
         __ReentrancyGuard_init();
 
-        // 상태 변수 설정
         stKAIA = IERC20(_stKAIA);
         uniswapRouter = IUniswapV3Router(_uniswapRouter);
         perpDex = IPerpDex(_perpDex);
-        usdt = IERC20(_asset);
+
+        swapFee = 3000;
+        leverage = 2 * 1e18;
+        perpDexTokenType = IPerpDex.TokenType.Klay;
     }
 
     /**
@@ -90,43 +97,78 @@ contract StkaiaDeltaNeutralVault is
 
         // ERC4626 표준에 따라 입금을 처리하고 쉐어를 계산합니다.
         // 부모 컨트랙트의 deposit 함수를 `super`로 호출하여 쉐어를 반환받습니다.
-        // 이 함수는 내부적으로 `_deposit`을 호출하고 자산 전송을 처리합니다.
-        // 이 과정에서 `asset` (USDT)이 사용자로부터 이 컨트랙트로 전송됩니다.
         shares = super.deposit(assets, receiver);
 
         // 입금된 자금으로 투자 전략을 실행합니다.
-        if (assets > 0) {
-            _executeStrategy(assets);
-        }
+        IPerpDex.OraclePrices memory emptyOraclePrices;
+        _executeStrategy(assets, emptyOraclePrices);
     }
 
     /**
      * @notice 예치된 USDT를 사용하여 델타 중립 전략을 수행하는 내부 함수
-     * @dev 현재는 플레이스홀더이며, 향후 실제 전략 로직이 구현될 예정입니다.
-     * - 50% USDT -> stKAIA 스왑
-     * - 50% USDT -> PerpDEX 숏 포지션 오픈
+     * @dev 50% USDT -> stKAIA 스왑, 50% USDT -> PerpDEX 숏 포지션 오픈
      * @param _usdtAmount 전략을 수행할 USDT의 총량
+     * @param _oraclePrices 숏 포지션 오픈에 필요한 오라클 데이터
      */
-    function _executeStrategy(uint256 _usdtAmount) internal {
+    function _executeStrategy(
+        uint256 _usdtAmount,
+        IPerpDex.OraclePrices memory _oraclePrices
+    ) internal {
         require(_usdtAmount > 0, "Vault: amount must be > 0");
 
-        // TODO: 여기에 실제 전략 실행 코드를 구현합니다.
         // 1. 입금된 USDT의 절반(amountToSwap)과 나머지 절반(amountToShort)을 계산합니다.
-        //    uint256 amountToSwap = _usdtAmount / 2;
-        //    uint256 amountToShort = _usdtAmount - amountToSwap;
+        uint256 amountToSwap = _usdtAmount / 2;
+        uint256 amountToShort = _usdtAmount - amountToSwap;
 
-        // 2. PancakeSwap/Uniswap V3 라우터를 통해 USDT를 stKAIA로 스왑합니다.
-        //    - exactInputSingle 함수를 사용하기 위한 파라미터를 준비합니다.
-        //    - asset(USDT) 토큰을 라우터 컨트랙트에 approve 해야 합니다.
-        //    - 스왑을 실행하고 받은 stKAIA 수량을 기록합니다.
-        //    - 이벤트(StrategyExecuted)를 발생시킵니다.
+        IERC20 usdt = IERC20(asset());
+
+        // 2. Uniswap V3 라우터를 통해 USDT를 stKAIA로 스왑합니다.
+        // 2-1. 라우터에 USDT 사용을 승인합니다.
+        usdt.approve(address(uniswapRouter), 0);
+        usdt.approve(address(uniswapRouter), amountToSwap);
+
+        // 2-2. 스왑 파라미터를 준비하고 실행합니다.
+        IUniswapV3Router.ExactInputSingleParams memory params = IUniswapV3Router
+            .ExactInputSingleParams({
+                tokenIn: address(usdt),
+                tokenOut: address(stKAIA),
+                fee: swapFee,
+                recipient: address(this),
+                amountIn: amountToSwap,
+                amountOutMinimum: 0, // TODO: 프로덕션에서는 슬리피지 보호를 위해 0이 아닌 값을 사용해야 합니다.
+                sqrtPriceLimitX96: 0
+            });
+        uint256 stKAIAAmountReceived = uniswapRouter.exactInputSingle(params);
 
         // 3. 나머지 절반의 USDT로 K-bit perpDEX에서 숏 포지션을 오픈합니다.
-        //    - openPosition 함수를 사용하기 위한 파라미터를 준비합니다.
-        //    - asset(USDT) 토큰을 perpDEX 컨트랙트에 approve 해야 합니다.
-        //    - 숏 포지션을 오픈합니다.
+        if (amountToShort > 0) {
+            // 3-1. PerpDEX에 USDT 사용을 승인합니다.
+            usdt.approve(address(perpDex), 0);
+            usdt.approve(address(perpDex), amountToShort);
 
-        emit StrategyExecuted(_usdtAmount, 0); // 임시: 받은 stKAIA 수량은 0으로 설정
+            // 3-2. 숏 포지션 오픈 파라미터를 준비하고 실행합니다.
+            IPerpDex.OpenPositionData memory posData = IPerpDex
+                .OpenPositionData({
+                    tokenType: perpDexTokenType,
+                    marginAmount: amountToShort,
+                    leverage: leverage,
+                    long: false, // 숏 포지션
+                    trader: address(this),
+                    priceData: _oraclePrices, // TODO: 프로덕션에서는 신뢰할 수 있는 외부 소스로부터 받아야 합니다.
+                    tpPrice: 0,
+                    slPrice: 0,
+                    expectedPrice: 0,
+                    userSignedData: ""
+                });
+            perpDex.openPosition(posData);
+        }
+
+        emit StrategyExecuted(
+            _usdtAmount,
+            amountToSwap,
+            amountToShort,
+            stKAIAAmountReceived
+        );
     }
 
     /**
