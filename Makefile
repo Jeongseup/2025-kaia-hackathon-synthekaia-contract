@@ -28,6 +28,22 @@ help:
 	@echo "  make clean        Remove the build artifacts and cache."
 	@echo "  make fmt          Format the Solidity code using forge fmt."
 
+interact:
+	@echo "Interacting with the deployed vault..."
+	@forge script script/InteractWithVault.s.sol:InteractWithVault \
+		--rpc-url $(KAIA_RPC_URL) \
+		--private-key $(PRIVATE_KEY) \
+		--broadcast -vvvv
+
+CONTRACT_ADDRESS ?= 0x8377d9c6d0519fa37fe6a0d8e90eaa9d58e8b038
+CONTRACT_NAME ?= StkaiaDeltaNeutralVault
+COMPILER_VERSION ?= 0.8.30
+verify:
+	@forge verify-contract \
+		--verifier-url https://kairos-api.kaiascan.io/forge-verify-flatten \
+		--chain-id 1001 \
+		--compiler-version ${COMPILER_VERSION} ${CONTRACT_ADDRESS} Flattened.sol:${CONTRACT_NAME} --retries 1
+
 balances:
 	@echo "Checking balances..."
 	@forge script script/Balances.s.sol:Balances \
@@ -61,7 +77,7 @@ build:
 
 test:
 	@echo "Running tests..."
-	@forge test
+	@forge test -vvv
 
 clean:
 	@echo "Cleaning build artifacts..."

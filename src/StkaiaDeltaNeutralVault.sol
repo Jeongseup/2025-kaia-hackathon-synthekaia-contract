@@ -7,10 +7,11 @@ import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/Own
 import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import {ReentrancyGuardUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-
 import {IUniswapV3Router} from "./interfaces/IUniswapV3Router.sol";
 import {IPerpDex} from "./interfaces/IPerpDex.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 /**
  * @title StkaiaDeltaNeutralVault
@@ -33,10 +34,22 @@ contract StkaiaDeltaNeutralVault is
     IPerpDex public perpDex;
     IERC20 public stKAIA;
 
+    uint256 public totalUsdtDeposited;
+    uint256 public totalUsdtShorted;
+
     // --- 전략 설정 변수 ---
     uint24 public swapFee; // Uniswap V3 풀의 수수료 (e.g., 3000 for 0.3%)
     uint256 public leverage; // 숏 포지션 레버리지 (e.g., 2 * 1e18 for 2x)
     IPerpDex.TokenType public perpDexTokenType; // K-bit DEX에서 거래할 토큰 타입
+
+    // --- 구조체 ---
+    struct VaultStatus {
+        uint256 totalUsdtEverDeposited;
+        uint256 totalUsdtCurrentlyShorted;
+        uint256 currentStkAIABalance;
+        uint256 totalShares;
+        uint256 leftoverUsdtInVault;
+    }
 
     // --- 이벤트 ---
     event StrategyExecuted(
@@ -102,6 +115,9 @@ contract StkaiaDeltaNeutralVault is
         // 입금된 자금으로 투자 전략을 실행합니다.
         IPerpDex.OraclePrices memory emptyOraclePrices;
         _executeStrategy(assets, emptyOraclePrices);
+
+        // 총 예치된 USDT 추적 변수 업데이트
+        totalUsdtDeposited += assets;
     }
 
     /**
@@ -161,6 +177,7 @@ contract StkaiaDeltaNeutralVault is
                     userSignedData: ""
                 });
             perpDex.openPosition(posData);
+            totalUsdtShorted += amountToShort;
         }
 
         emit StrategyExecuted(
@@ -169,6 +186,18 @@ contract StkaiaDeltaNeutralVault is
             amountToShort,
             stKAIAAmountReceived
         );
+    }
+
+    // --- Public/External View 함수 ---
+    function getVaultStatus() external view returns (VaultStatus memory) {
+        return
+            VaultStatus({
+                totalUsdtEverDeposited: totalUsdtDeposited,
+                totalUsdtCurrentlyShorted: totalUsdtShorted,
+                currentStkAIABalance: stKAIA.balanceOf(address(this)),
+                totalShares: totalSupply(),
+                leftoverUsdtInVault: IERC20(asset()).balanceOf(address(this))
+            });
     }
 
     /**
@@ -182,6 +211,56 @@ contract StkaiaDeltaNeutralVault is
     function totalAssets() public view override returns (uint256) {
         // TODO: stKAIA 잔액 가치와 숏 포지션 PnL을 포함한 전체 자산 가치를 계산해야 합니다.
         return IERC20(asset()).balanceOf(address(this));
+    }
+
+    // --- ERC4626 소수점 정규화 함수 ---
+
+    /**
+     * @dev 자산(USDT) 수량을 쉐어 수량으로 변환합니다.
+     * 부모 로직을 대체하여 소수점 차이만 정확하게 보정합니다.
+     */
+    function _convertToShares(
+        uint256 _assets,
+        Math.Rounding _rounding
+    ) internal view override returns (uint256) {
+        // rounding 파라미터는 이 함수의 로직에 영향을 주지 않으므로 무시합니다.
+        _rounding; // Unused parameter warning 방지
+
+        // ✨ FIX: super 호출을 제거하고 소수점 변환 로직만 남깁니다.
+        // 이것이 1:1 가치 비율을 올바르게 설정하는 방법입니다.
+        uint256 assetDecimals = ERC20(address(asset())).decimals();
+        uint256 shareDecimals = decimals();
+
+        if (shareDecimals < assetDecimals) {
+            // 이 볼트에서는 발생하지 않지만, 일반성을 위해 남겨둡니다.
+            return _assets / (10 ** (assetDecimals - shareDecimals));
+        } else {
+            // 예: USDT(6) -> Share(18)로 변환 시, 10**12를 곱해줍니다.
+            return _assets * (10 ** (shareDecimals - assetDecimals));
+        }
+    }
+
+    /**
+     * @dev 쉐어 수량을 자산(USDT) 수량으로 변환합니다.
+     * 부모 로직을 대체하여 소수점 차이만 정확하게 보정합니다.
+     */
+    function _convertToAssets(
+        uint256 _shares,
+        Math.Rounding _rounding
+    ) internal view override returns (uint256) {
+        // rounding 파라미터는 이 함수의 로직에 영향을 주지 않으므로 무시합니다.
+        _rounding; // Unused parameter warning 방지
+
+        // ✨ FIX: super 호출을 제거하고 소수점 변환 로직만 남깁니다.
+        uint256 assetDecimals = ERC20(address(asset())).decimals();
+        uint256 shareDecimals = decimals();
+
+        if (shareDecimals < assetDecimals) {
+            return _shares * (10 ** (assetDecimals - shareDecimals));
+        } else {
+            // 예: Share(18) -> USDT(6)로 변환 시, 10**12로 나눠줍니다.
+            return _shares / (10 ** (shareDecimals - assetDecimals));
+        }
     }
 
     // --- 추가적인 볼트 관리 함수 (향후 구현) ---

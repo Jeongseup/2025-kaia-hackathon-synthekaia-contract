@@ -30,14 +30,33 @@ contract Utility is Script {
      */
     function getMostRecentDeployment(
         string memory contractName
-    ) public view returns (address stableKRWAddress, address escrowAddress) {
+    )
+        public
+        view
+        returns (
+            address usdtAddress,
+            address stkaiaAddress,
+            address routerAddress,
+            address perpDexAddress,
+            address vaultImplementationAddress,
+            address vaultProxyAddress
+        )
+    {
         string memory logPath = _getMostRecentLogPath(contractName);
         string memory json = vm.readFile(logPath);
 
         // [핵심 수정 부분]
         // parseRaw 대신, address 타입 전용 파서인 readAddress를 사용합니다.
         // 코드가 더 간결해지고, 타입 변환 과정의 실수를 방지할 수 있습니다.
-        stableKRWAddress = json.readAddress(".transactions[0].contractAddress");
-        escrowAddress = json.readAddress(".transactions[1].contractAddress");
+        usdtAddress = json.readAddress(".transactions[0].contractAddress");
+        stkaiaAddress = json.readAddress(".transactions[1].contractAddress");
+        routerAddress = json.readAddress(".transactions[2].contractAddress");
+        perpDexAddress = json.readAddress(".transactions[3].contractAddress");
+        vaultImplementationAddress = json.readAddress(
+            ".transactions[4].contractAddress"
+        );
+        vaultProxyAddress = json.readAddress(
+            ".transactions[5].contractAddress"
+        );
     }
 }

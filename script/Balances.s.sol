@@ -20,9 +20,8 @@ contract Balances is Script {
         // 가장 최근에 실행된 DeployAll.s.sol 스크립트의 배포 정보를 가져옵니다.
         // Utilities.s.sol 헬퍼 컨트랙트를 사용하여 broadcast 로그에서 컨트랙트 주소를 읽어옵니다.
         Utility utility = new Utility();
-        (address mUSDT, address mstKAIA) = utility.getMostRecentDeployment(
-            "DeployVault"
-        );
+        (address mUSDT, address mstKAIA, , , , ) = utility
+            .getMostRecentDeployment("DeployVault");
         require(
             mUSDT != address(0) && mstKAIA != address(0),
             "Deployment not found. Run deployment script first."

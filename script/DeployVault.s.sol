@@ -126,15 +126,22 @@ contract DeployVault is Script {
             "stKAIA"
         );
 
-        // ✨ FIX: 테스트 유저에게 초기 자금(mUSDT)을 민팅합니다.
+        // ✨ FIX: 테스트 유저와 개발자 주소로 초기 자금(mUSDT)을 민팅합니다. 둘 주소 전부 테스트 시나리오에 사용될 수 있도록 합니다.
         console.log("Minting initial funds to test user...");
-        uint256 INITIAL_USER_BALANCE = 1_000_000 * 1e18;
+        uint256 INITIAL_USER_BALANCE = 1_000_000 * 1e6;
         mockUsdt.mint(testUserAddress, INITIAL_USER_BALANCE);
         console.log(
             "-> Minted",
-            INITIAL_USER_BALANCE / 1e18,
+            INITIAL_USER_BALANCE / 1e6,
             "mUSDT to:",
             testUserAddress
+        );
+        mockUsdt.mint(deployerAddress, INITIAL_USER_BALANCE);
+        console.log(
+            "-> Minted",
+            INITIAL_USER_BALANCE / 1e6,
+            "mUSDT to:",
+            deployerAddress
         );
 
         console.log("Deployment and configuration complete.");
