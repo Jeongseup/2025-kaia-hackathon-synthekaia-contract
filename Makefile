@@ -28,6 +28,11 @@ help:
 	@echo "  make clean        Remove the build artifacts and cache."
 	@echo "  make fmt          Format the Solidity code using forge fmt."
 
+show-contracts:
+	@echo "Showing deployed contract addresses..."
+	@forge script script/ShowContracts.s.sol:ShowContracts \
+		--rpc-url $(KAIA_RPC_URL) 
+
 interact:
 	@echo "Interacting with the deployed vault..."
 	@forge script script/InteractWithVault.s.sol:InteractWithVault \
