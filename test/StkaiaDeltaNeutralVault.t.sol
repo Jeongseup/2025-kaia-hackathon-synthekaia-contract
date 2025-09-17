@@ -34,7 +34,7 @@ contract StkaiaDeltaNeutralVaultTest is Test {
         user = makeAddr("user");
 
         // 1. Mock 컨트랙트들 배포
-        usdt = new MockERC20("Tether", "USDT", 18);
+        usdt = new MockERC20("Tether", "USDT", 6);
         stKAIA = new MockERC20("Staked KAIA", "stKAIA", 18);
         router = new MockUniswapV3Router();
         perpDex = new MockPerpDex();

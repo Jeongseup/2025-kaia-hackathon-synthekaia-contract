@@ -44,12 +44,12 @@ contract Balances is Script {
         console.log("--- Balance Check ---");
         console.log(
             "Deployer's mUSDT Balance:  ",
-            mUSDTDeployerBalance / 1e18,
+            mUSDTDeployerBalance / 1e6,
             "mUSDT"
         );
         console.log(
             "User's mUSDT Balance:      ",
-            mUSDTUserBalance / 1e18,
+            mUSDTUserBalance / 1e6,
             "mUSDT"
         );
         console.log("---------------------");

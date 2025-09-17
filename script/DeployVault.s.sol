@@ -34,7 +34,7 @@ contract DeployVault is Script {
         )
     {
         DeploymentAddresses memory addresses = _deployContracts();
-        
+
         vaultProxy = addresses.vaultProxy;
         usdt = addresses.usdt;
         stKAIA = addresses.stKAIA;
@@ -42,7 +42,10 @@ contract DeployVault is Script {
         perpDex = addresses.perpDex;
     }
 
-    function _deployContracts() internal returns (DeploymentAddresses memory addresses) {
+    function _deployContracts()
+        internal
+        returns (DeploymentAddresses memory addresses)
+    {
         // .env 파일에서 배포자의 private key와 테스트 유저 주소를 읽어옵니다.
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         address deployerAddress = vm.addr(deployerPrivateKey);
@@ -57,7 +60,7 @@ contract DeployVault is Script {
 
         // --- 1. Mock 컨트랙트 배포 ---
         console.log("Deploying Mock USDT...");
-        MockERC20 mockUsdt = new MockERC20("Mock Tether", "mUSDT", 18);
+        MockERC20 mockUsdt = new MockERC20("Mock Tether", "mUSDT", 6);
         addresses.usdt = address(mockUsdt);
         console.log("-> Mock USDT deployed at:", addresses.usdt);
 
