@@ -28,6 +28,12 @@ help:
 	@echo "  make clean        Remove the build artifacts and cache."
 	@echo "  make fmt          Format the Solidity code using forge fmt."
 
+read-vault-status:
+	@echo "Reading vault status..."
+	@forge script script/ReadVaultStatus.s.sol:ReadVaultStatus \
+		--rpc-url $(KAIA_RPC_URL) \
+		-vvv
+		
 show-contracts:
 	@echo "Showing deployed contract addresses..."
 	@forge script script/ShowContracts.s.sol:ShowContracts \
@@ -40,10 +46,13 @@ interact:
 		--private-key $(PRIVATE_KEY) \
 		--broadcast -vvvv
 
-CONTRACT_ADDRESS ?= 0x8377d9c6d0519fa37fe6a0d8e90eaa9d58e8b038
+CONTRACT_ADDRESS ?= 0xee85600aab576a8f80d392E25886fbDBd7f8BF38
 CONTRACT_NAME ?= StkaiaDeltaNeutralVault
 COMPILER_VERSION ?= 0.8.30
-verify:
+
+verify-contract:
+	@echo "Verifying contract on Kaiascan..."
+	@forge flatten src/StkaiaDeltaNeutralVault.sol > Flattened.sol
 	@forge verify-contract \
 		--verifier-url https://kairos-api.kaiascan.io/forge-verify-flatten \
 		--chain-id 1001 \

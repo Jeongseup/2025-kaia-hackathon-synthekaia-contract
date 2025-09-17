@@ -13,7 +13,7 @@ import {Utility} from "./Utility.s.sol";
  */
 contract InteractWithVault is Script {
     // 테스트 유저가 입금할 금액
-    uint256 public constant DEPOSIT_AMOUNT = 10 * 1e6;
+    uint256 public constant DEPOSIT_AMOUNT = 10000 * 1e6;
 
     function run() external {
         // --- 1. 상호작용 준비 ---

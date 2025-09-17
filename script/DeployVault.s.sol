@@ -23,6 +23,10 @@ contract DeployVault is Script {
         address perpDex;
     }
 
+    // --- 토큰 소수점 상수 ---
+    uint256 private constant USDT_DECIMALS = 6;
+    uint256 private constant STKAIA_DECIMALS = 18;
+
     function run()
         external
         returns (
@@ -60,12 +64,20 @@ contract DeployVault is Script {
 
         // --- 1. Mock 컨트랙트 배포 ---
         console.log("Deploying Mock USDT...");
-        MockERC20 mockUsdt = new MockERC20("Mock Tether", "mUSDT", 6);
+        MockERC20 mockUsdt = new MockERC20(
+            "Mock Tether",
+            "mUSDT",
+            uint8(USDT_DECIMALS)
+        );
         addresses.usdt = address(mockUsdt);
         console.log("-> Mock USDT deployed at:", addresses.usdt);
 
         console.log("Deploying Mock stKAIA...");
-        MockERC20 mockStKAIA = new MockERC20("Mock Staked KAIA", "mstKAIA", 18);
+        MockERC20 mockStKAIA = new MockERC20(
+            "Mock Staked KAIA",
+            "mstKAIA",
+            uint8(STKAIA_DECIMALS)
+        );
         addresses.stKAIA = address(mockStKAIA);
         console.log("-> Mock stKAIA deployed at:", addresses.stKAIA);
 
@@ -117,13 +129,20 @@ contract DeployVault is Script {
             "stKAIA to Mock Router"
         );
 
-        uint256 amountToSwap = 1000 * 1e18;
-        uint256 expectedStKAIAOut = (amountToSwap * 98) / 100;
-        mockRouter.setExpectedAmountOut(expectedStKAIAOut);
+        // --- ✨ 수정된 부분: 1 mUSDT -> 0.1641 stKAIA 비율로 스왑 결과 설정 ---
+        console.log("Configuring mock swap rate: 1 mUSDT -> 0.1641 stKAIA");
+        // 이 설정은 실제로 스왑되는 양과 무관하게, 라우터가 따를 '교환 비율'을 설정하는 것입니다.
+        // Vault가 1000 mUSDT를 스왑하면, 164.1 stKAIA를 받게 됩니다.
+        uint256 amountToSwap = 1_000_000 * (10 ** USDT_DECIMALS); // 1,000,000 mUSDT 기준
+
+        // expectedStKAIAOut = (1,000,000 * 10**6) * (1641 / 10000) * (10**12)
+        // 정밀도 유지를 위해 곱셈을 먼저 수행합니다.
+        uint256 expectedStKAIAOut = (amountToSwap *
+            1641 *
+            (10 ** (STKAIA_DECIMALS - USDT_DECIMALS))) / 10000;
+        mockRouter.setExpectedAmountOut(expectedStKAIAOut); // 실제로는 Vault가 스왑하는 양에 따라 이 값이 동적으로 계산되어야 하지만, Mock에서는 이 비율을 따르도록 설정합니다.
         console.log(
-            "-> Mock Router is configured to return",
-            expectedStKAIAOut / 1e18,
-            "stKAIA"
+            "-> Mock Router is now configured to return stKAIA at the specified rate."
         );
 
         // ✨ FIX: 테스트 유저와 개발자 주소로 초기 자금(mUSDT)을 민팅합니다. 둘 주소 전부 테스트 시나리오에 사용될 수 있도록 합니다.
