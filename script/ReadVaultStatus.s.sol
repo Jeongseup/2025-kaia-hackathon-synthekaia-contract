@@ -77,9 +77,8 @@ contract ReadVaultStatus is Script {
         );
 
         // 실제 프론트엔드에서는 가격 API를 통해 이 값들을 실시간으로 받아옵니다.
-        // 예: 1 stKAIA = 1.02 USDT (가격 상승 가정) -> 1 stKAIA = 0.1643
-
-        uint256 stkaiaPriceInUsdt = 1643 * (10 ** (USDT_DECIMALS - 4)); // 1.02 * 1e6
+        // 예: 1 stKAIA = 0.1643 USDT
+        uint256 stkaiaPriceInUsdt = 1643 * (10 ** (USDT_DECIMALS - 4));
         // 예: 숏 포지션의 가치가 5% 상승했다고 가정 (수익 발생)
         uint256 shortPositionPnlMultiplier = 105; // 1.05 -> 105 / 100
 
@@ -94,7 +93,7 @@ contract ReadVaultStatus is Script {
             shortPositionValueInUsdt +
             status.leftoverUsdtInVault;
 
-        console.log("   - Mock stKAIA Price: 1.02 USDT");
+        console.log("   - Mock stKAIA Price: 0.1641 USDT");
         console.log("   - Mock Short PnL: +5.00%");
         console.log(
             "   - stKAIA Value (in USDT):",

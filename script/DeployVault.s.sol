@@ -140,7 +140,7 @@ contract DeployVault is Script {
         uint256 expectedStKAIAOut = (amountToSwap *
             1641 *
             (10 ** (STKAIA_DECIMALS - USDT_DECIMALS))) / 10000;
-        mockRouter.setExpectedAmountOut(expectedStKAIAOut); // 실제로는 Vault가 스왑하는 양에 따라 이 값이 동적으로 계산되어야 하지만, Mock에서는 이 비율을 따르도록 설정합니다.
+        // mockRouter.setExpectedAmountOut(expectedStKAIAOut); // 실제로는 Vault가 스왑하는 양에 따라 이 값이 동적으로 계산되어야 하지만, Mock에서는 이 비율을 따르도록 설정합니다.
         console.log(
             "-> Mock Router is now configured to return stKAIA at the specified rate."
         );

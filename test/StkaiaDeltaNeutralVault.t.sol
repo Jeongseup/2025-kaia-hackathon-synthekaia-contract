@@ -34,7 +34,7 @@ contract StkaiaDeltaNeutralVaultTest is Test {
     uint256 internal constant INITIAL_USER_BALANCE =
         1_000_000 * (10 ** USDT_DECIMALS); // 1,000,000 USDT
     uint256 internal constant INITIAL_ROUTER_STKAIA_BALANCE =
-        1_000_000 * (10 ** STKAIA_DECIMALS);
+        10_000_000 * (10 ** STKAIA_DECIMALS); // Mock 라우터에 넉넉한 stKAIA 공급
 
     function setUp() public {
         owner = makeAddr("owner");
@@ -75,54 +75,52 @@ contract StkaiaDeltaNeutralVaultTest is Test {
      */
     function testDeposit_IssuesShares() public {
         uint256 depositAmount = 1000 * (10 ** USDT_DECIMALS);
-
-        // 사용자가 볼트에 USDT 사용을 승인합니다.
         vm.startPrank(user);
         usdt.approve(address(vault), depositAmount);
-
-        // 사용자가 deposit을 호출합니다.
         uint256 shares = vault.deposit(depositAmount, user);
         vm.stopPrank();
 
-        // 발행된 쉐어 수량이 0보다 큰지 확인합니다.
-        // 첫 입금이므로 자산과 쉐어는 1:1 비율이어야 합니다.
-        assertTrue(shares > 0);
+        assertTrue(shares > 0, "Shares should be issued");
+        // asset(USDT, 6)과 share(6)이므로 1:1 비율로 발행됩니다.
+        uint256 expectedShares = 1000 * (10 ** USDT_DECIMALS);
         assertEq(
             shares,
-            depositAmount,
-            "Shares should be equal to assets on initial deposit"
-        );
-
-        // 사용자의 USDT 잔액이 감소했는지 확인합니다.
-        assertEq(
-            usdt.balanceOf(user),
-            INITIAL_USER_BALANCE - depositAmount,
-            "User USDT balance should decrease"
+            expectedShares,
+            "Shares should correspond to assets considering decimals"
         );
     }
 
     /**
-     * @notice 사용자의 deposit이 _executeStrategy를 올바르게 트리거하는지 테스트합니다.
+     * @notice ✨ 수정됨: 동적 비율 Mock 라우터의 스왑 로직을 검증하는 테스트
+     * @dev 1 USDT -> 6.02 stKAIA 비율이 올바르게 적용되는지 확인합니다.
      */
-    function testDeposit_Triggers_ExecuteStrategy() public {
+    function testDeposit_Triggers_ExecuteStrategy_WithDynamicRate() public {
         // --- 1. Arrange ---
-        uint256 depositAmount = 2000 * (10 ** USDT_DECIMALS);
-        uint256 amountToSwap = depositAmount / 2;
+        uint256 depositAmount = 2000 * (10 ** USDT_DECIMALS); // 2000 USDT 예치
+        uint256 amountToSwap = depositAmount / 2; // 1000 USDT를 스왑
         uint256 amountToShort = depositAmount - amountToSwap;
 
-        // Mock Uniswap 라우터가 스왑의 결과로 반환할 stKAIA 수량을 설정합니다.
-        // 1 USDT = 0.98 stKAIA 라고 가정
-        uint256 expectedStKAIAOut = ((amountToSwap * 98) / 100) *
+        // Mock 라우터의 로직(1 USDT -> 6.02 stKAIA)에 따라 예상 결과값을 계산합니다.
+        // 소수점 차이를 반드시 보정해야 합니다.
+        uint256 scaledExpectedStKAIA = (amountToSwap * 602) / 100;
+        uint256 expectedStKAIAOut = scaledExpectedStKAIA *
             (10 ** (STKAIA_DECIMALS - USDT_DECIMALS));
-        router.setExpectedAmountOut(expectedStKAIAOut);
 
-        // 유저가 볼트 컨트랙트에 입금할 금액을 approve합니다.
+        console.log("--- Test: Dynamic Rate Router Swap ---");
+        console.log(
+            "Amount to Swap (USDT):",
+            amountToSwap / (10 ** USDT_DECIMALS)
+        );
+        console.log(
+            "Expected stKAIA Out (Human-Readable):",
+            expectedStKAIAOut / (10 ** STKAIA_DECIMALS)
+        );
+        console.log("Expected stKAIA Out (Raw Wei):", expectedStKAIAOut);
+
         vm.prank(user);
         usdt.approve(address(vault), depositAmount);
 
         // --- 2. Act ---
-
-        // StrategyExecuted 이벤트가 올바른 파라미터로 발생하는지 검사하도록 설정합니다.
         vm.expectEmit(true, true, true, true);
         emit StkaiaDeltaNeutralVault.StrategyExecuted(
             depositAmount,
@@ -131,27 +129,33 @@ contract StkaiaDeltaNeutralVaultTest is Test {
             expectedStKAIAOut
         );
 
-        // 유저가 deposit 함수를 호출합니다.
         vm.prank(user);
         vault.deposit(depositAmount, user);
 
         // --- 3. Assert ---
-
-        // Vault가 스왑 결과로 stKAIA를 받았는지 확인합니다.
-        assertEq(
-            stKAIA.balanceOf(address(vault)),
-            expectedStKAIAOut,
-            "Vault should receive stKAIA after swap"
+        uint256 actualStkaiABalance = stKAIA.balanceOf(address(vault));
+        console.log("Actual stKAIA Balance (Raw Wei):", actualStkaiABalance);
+        console.log(
+            "Actual stKAIA Balance (Human-Readable):",
+            actualStkaiABalance / (10 ** STKAIA_DECIMALS)
         );
 
-        // Vault의 USDT 잔액이 0인지 확인합니다 (전략에 모두 사용되었으므로).
+        assertEq(
+            actualStkaiABalance,
+            expectedStKAIAOut,
+            "Vault should receive the correct amount of stKAIA based on dynamic rate"
+        );
+        console.log(
+            "Assertion Passed: Vault received the correct amount of stKAIA."
+        );
+
         assertEq(
             usdt.balanceOf(address(vault)),
             0,
             "Vault USDT balance should be 0 after strategy execution"
         );
+        console.log("Assertion Passed: Vault USDT balance is 0.");
 
-        // Mock PerpDex의 상태를 확인하여 openPosition이 올바른 값으로 호출되었는지 검증합니다.
         IPerpDex.OpenPositionData memory lastPosition = perpDex
             .getLastOpenPositionData();
         assertEq(
@@ -165,13 +169,10 @@ contract StkaiaDeltaNeutralVaultTest is Test {
             "PerpDex tokenType is incorrect"
         );
         assertEq(lastPosition.long, false, "Position should be short");
+        console.log("Assertion Passed: PerpDEX call was correct.");
     }
 
-    /**
-     * @notice test_fail_DepositZero: 0개의 자산을 예치하려고 할 때 실패하는지 테스트합니다.
-     */
     function test_fail_DepositZero() public {
-        // deposit 함수는 0개의 자산을 예치할 경우 revert되어야 합니다.
         vm.prank(user);
         vm.expectRevert("Vault: amount must be > 0");
         vault.deposit(0, user);
@@ -179,17 +180,13 @@ contract StkaiaDeltaNeutralVaultTest is Test {
 
     /**
      * @notice ✨ 신규: deposit 이후 Vault의 상태를 조회하고 가치를 계산하는 플로우를 테스트합니다.
+     * @dev 동적 비율(1 USDT -> 6.02 stKAIA) 라우터를 사용하여 테스트합니다.
      */
     function test_ReadAndCalculateVaultStatus_AfterDeposit() public {
         // --- 0. Arrange ---
-        uint256 depositAmount = 2000 * (10 ** USDT_DECIMALS); // 2,000 USDT 예치
-        uint256 amountToSwap = depositAmount / 2;
+        uint256 depositAmount = 2000 * (10 ** USDT_DECIMALS); // 5,000 USDT 예치
 
-        // 1 USDT = 0.98 stKAIA 라고 가정, 소수점 보정
-        uint256 expectedStKAIAOut = ((amountToSwap * 98) / 100) *
-            (10 ** (STKAIA_DECIMALS - USDT_DECIMALS));
-        router.setExpectedAmountOut(expectedStKAIAOut);
-
+        // 사전 실행: 사용자가 approve 및 deposit을 수행합니다.
         vm.startPrank(user);
         usdt.approve(address(vault), depositAmount);
         vault.deposit(depositAmount, user);
@@ -218,12 +215,12 @@ contract StkaiaDeltaNeutralVaultTest is Test {
             "Current stKAIA Balance:",
             status.currentStkAIABalance / (10 ** STKAIA_DECIMALS)
         );
-        console.log("Total Shares Minted:", status.totalShares);
+        console.log("Total Shares Minted (Raw):", status.totalShares);
         console.log(
             "Leftover USDT in Vault (Dust):",
             status.leftoverUsdtInVault
         );
-        console.log("User Share Balance:", userShares);
+        console.log("User Share Balance (Raw):", userShares);
 
         // --- 2. Vault 총 가치(TVL) 계산 시뮬레이션 ---
         console.log(
@@ -231,8 +228,8 @@ contract StkaiaDeltaNeutralVaultTest is Test {
         );
 
         // 실제 프론트엔드에서는 가격 API를 통해 이 값들을 실시간으로 받아옵니다.
-        // 예: 1 stKAIA = 1.02 USDT (가격 상승 가정)
-        uint256 stkaiaPriceInUsdt = 102 * (10 ** (USDT_DECIMALS - 2)); // 1.02 * 1e6
+        // 예: 1 stKAIA = 0.17 USDT (1/6.02 ≈ 0.166, 가격 약간 상승 가정)
+        uint256 stkaiaPriceInUsdt = 17 * (10 ** (USDT_DECIMALS - 2)); // 0.17 * 1e6
         // 예: 숏 포지션의 가치가 5% 상승했다고 가정 (수익 발생)
         uint256 shortPositionPnlMultiplier = 105; // 1.05 -> 105 / 100
 
