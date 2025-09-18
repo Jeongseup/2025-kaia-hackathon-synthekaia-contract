@@ -51,17 +51,17 @@ contract InteractWithVault is Script {
         console.log("-> Approve transaction sent.");
 
         // --- 2-2. Deposit ---
-        console.log("Depositing", DEPOSIT_AMOUNT / 1e18, "mUSDT into Vault...");
+        console.log("Depositing", DEPOSIT_AMOUNT / 1e6, "mUSDT into Vault...");
         uint256 shares = vault.deposit(DEPOSIT_AMOUNT, testUserAddress);
         console.log("-> Deposit transaction sent.");
-        console.log("-> Received", shares / 1e18, "shares.");
+        console.log("-> Received", shares / 1e6, "shares.");
 
         // --- 2-3. 상호작용 후 상태 확인 (선택사항) ---
         uint256 userUsdtBalance = usdt.balanceOf(testUserAddress);
-        console.log("-> Final user mUSDT balance:", userUsdtBalance / 1e18);
+        console.log("-> Final user mUSDT balance:", userUsdtBalance / 1e6);
 
         uint256 vaultShareBalance = vault.balanceOf(testUserAddress);
-        console.log("-> Final user share balance:", vaultShareBalance / 1e18);
+        console.log("-> Final user share balance:", vaultShareBalance / 1e6);
 
         // --- 3. 브로드캐스팅 종료 ---
         vm.stopBroadcast();
